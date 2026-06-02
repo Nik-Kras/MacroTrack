@@ -28,6 +28,66 @@ doppler run --project materi --config stg -- pnpm observability:nrql -- --nrql "
 
 After reading, **stop and diagnose** before touching any code.
 
+## MacroTrack Local App Logs
+
+For this repository, always check aggregated app logs before changing code when the bug involves startup, blank screens, loading forever, navigation, database state, or emulator behavior.
+
+The app emits unified structured logs through `src/lib/logger.ts`. Every line starts with:
+
+```text
+[MacroTrack] <iso timestamp> <LEVEL> <scope>: <message> <json context>
+```
+
+Primary startup scopes:
+
+- `app`: React app startup, loading timeout, startup failures
+- `db`: SQLite open, migration, seed, profile/body record loading
+
+When the app is stuck on `Opening local database`, use this order:
+
+1. Read the terminal that is running `pnpm emulator`; Metro prints React Native console logs there.
+2. Search for `[MacroTrack]` and the first `ERROR` or `WARN`.
+3. If Metro has no useful logs, read Android logcat with the same marker.
+4. Only then state the root-cause hypothesis.
+
+Useful commands from the repo root:
+
+```bash
+# Start or reuse emulator + Metro. Keep this running.
+pnpm emulator
+
+# In another terminal, read Android logs for the app marker.
+ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-/opt/homebrew/share/android-commandlinetools}"
+"$ANDROID_SDK_ROOT/platform-tools/adb" logcat -d | grep "\\[MacroTrack\\]" | tail -120
+
+# Stream only new MacroTrack logs while reproducing.
+"$ANDROID_SDK_ROOT/platform-tools/adb" logcat -c
+"$ANDROID_SDK_ROOT/platform-tools/adb" logcat | grep "\\[MacroTrack\\]"
+```
+
+If startup fails, the app should show an on-device `Startup failed` screen with the most recent in-memory log summary and a `Retry startup` button. Treat that visible summary as first-class evidence; copy the exact failing scope/message into the diagnosis.
+
+Expected healthy startup sequence:
+
+```text
+[MacroTrack] ... INFO app: startup load started
+[MacroTrack] ... INFO db: open macro database started
+[MacroTrack] ... INFO db: migration check started
+[MacroTrack] ... INFO db: database version read
+[MacroTrack] ... INFO db: migration skipped
+[MacroTrack] ... INFO db: open macro database completed
+[MacroTrack] ... INFO db: get profile completed
+[MacroTrack] ... INFO db: get latest body record completed
+[MacroTrack] ... INFO app: startup data loaded
+```
+
+If that sequence stops, the last emitted line identifies the layer to inspect first. For example:
+
+- stops before `database version read`: SQLite open or PRAGMA execution
+- stops during `schema migration`: table/view/trigger creation SQL
+- stops during `food seed`, `profile seed`, or `dish seed`: seed data or insert constraints
+- logs `has_profile: false` or `has_body_record: false`: seed or query issue after database open
+
 ## Phase 2 — Diagnose
 
 State your hypothesis explicitly before implementing anything:

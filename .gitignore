@@ -27,6 +27,11 @@ dist/
 build/
 coverage/
 
+# Expo / React Native
+.expo/
+ios/
+android/
+
 # Temp
 *.tmp
 .cache/
