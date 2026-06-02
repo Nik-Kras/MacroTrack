@@ -39,7 +39,173 @@ Fitness-minded individuals (cutting, bulking, body recomposition) who want preci
 - **Nutrition log** — per-day list of logged foods/dishes with grams, computed macros, and an optional attached photo.
 - **User profile & goals** — name, current stats, desired stats, activity level, goal type.
 
-> The Excel source is the human-editable source of truth for the general database. How it's consumed (shipped directly vs. transformed into SQLite at build time) is an implementation decision to be made later.
+> The Excel source is the human-editable source of truth for the general database. **Decision:** it is transformed into a prebuilt read-only SQLite asset **at build time** and bundled with the app (the `food` rows below are seeded from it with `is_seed = 1`). Curated-category flags travel from the spreadsheet columns into the `food` table verbatim.
+
+---
+
+## SQLite schema (local)
+
+Concrete on-device schema realizing the data model above. SQLite via Expo (`expo-sqlite`). Track the version with `PRAGMA user_version` and bump it on every migration. Enable `PRAGMA foreign_keys = ON`.
+
+**Default dish vs. custom dish — two different shapes (by design):**
+- A **default (seeded) dish** is a *flat macro row* in `food` (`kind = 'DISH'`, `is_seed = 1`) — just per-100 g macros, exactly like a product. It has no ingredient list.
+- A **custom dish** is a *composite*: a `custom_dish` row + N `custom_dish_ingredient` rows (each = a `food` product + grams). Its macros are **derived** (Σ of ingredient macros), so changing any ingredient's grams changes the dish totals. Per-person = total ÷ servings.
+
+```sql
+-- ============================================================
+-- 1. Foods: products + DEFAULT dishes + user-created single foods.
+--    Anything with flat per-100 g macros lives here. Seeded from
+--    the spreadsheet at build time (is_seed = 1, read-only in UI).
+-- ============================================================
+CREATE TABLE food (
+  id            INTEGER PRIMARY KEY,
+  kind          TEXT    NOT NULL CHECK (kind IN ('PRODUCT','DISH')),  -- DISH = default/seeded dish
+  is_seed       INTEGER NOT NULL DEFAULT 0,   -- 1 = shipped read-only baseline, 0 = user-created
+  category      TEXT,                          -- free-text category label from the source
+  name          TEXT    NOT NULL,
+  name_ua       TEXT,
+  aliases       TEXT,                          -- semicolon-separated (English), as in source
+  aliases_ua    TEXT,                          -- semicolon-separated (Ukrainian)
+  kcal          REAL    NOT NULL,              -- per 100 g, as shipped in source (see note)
+  protein_g     REAL    NOT NULL,              -- per 100 g
+  fat_g         REAL    NOT NULL,              -- per 100 g
+  carbs_g       REAL    NOT NULL,              -- per 100 g
+  -- curated-category flags (per-100 g classification, copied from source) --
+  low_kcal      INTEGER NOT NULL DEFAULT 0,
+  high_kcal     INTEGER NOT NULL DEFAULT 0,
+  low_fat       INTEGER NOT NULL DEFAULT 0,
+  high_fat      INTEGER NOT NULL DEFAULT 0,
+  low_protein   INTEGER NOT NULL DEFAULT 0,
+  high_protein  INTEGER NOT NULL DEFAULT 0,
+  low_carbs     INTEGER NOT NULL DEFAULT 0,
+  high_carbs    INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+  updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_food_kind ON food(kind);
+CREATE INDEX idx_food_name ON food(name);
+
+-- Full-text index over names + aliases for smart/fuzzy search (AC-FD-2).
+CREATE VIRTUAL TABLE food_fts USING fts5(
+  name, name_ua, aliases, aliases_ua,
+  content = 'food', content_rowid = 'id'
+);
+-- + standard FTS5 external-content sync triggers (food_ai / food_ad / food_au)
+--   to keep food_fts in step on INSERT/DELETE/UPDATE.
+
+-- ============================================================
+-- 2. Custom dishes: composite, ingredient-driven, macros DERIVED.
+-- ============================================================
+CREATE TABLE custom_dish (
+  id          INTEGER PRIMARY KEY,
+  name        TEXT    NOT NULL,
+  name_ua     TEXT,
+  photo_uri   TEXT,                            -- local file path (expo-file-system); never uploaded
+  servings    INTEGER NOT NULL DEFAULT 1 CHECK (servings >= 1),  -- persons
+  notes       TEXT,
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE custom_dish_ingredient (
+  id        INTEGER PRIMARY KEY,
+  dish_id   INTEGER NOT NULL REFERENCES custom_dish(id) ON DELETE CASCADE,
+  food_id   INTEGER NOT NULL REFERENCES food(id),  -- the product/ingredient used
+  grams     REAL    NOT NULL CHECK (grams >= 0),
+  position  INTEGER NOT NULL DEFAULT 0             -- display order in the dish
+);
+CREATE INDEX idx_cdi_dish ON custom_dish_ingredient(dish_id);
+
+-- Derived (not stored) dish totals; per-person = total / servings (AC-DI-1).
+CREATE VIEW custom_dish_macros AS
+SELECT d.id AS dish_id, d.servings,
+       SUM(f.kcal      * i.grams / 100.0) AS total_kcal,
+       SUM(f.protein_g * i.grams / 100.0) AS total_protein_g,
+       SUM(f.fat_g     * i.grams / 100.0) AS total_fat_g,
+       SUM(f.carbs_g   * i.grams / 100.0) AS total_carbs_g
+FROM custom_dish d
+JOIN custom_dish_ingredient i ON i.dish_id = d.id
+JOIN food f                   ON f.id = i.food_id
+GROUP BY d.id, d.servings;
+
+-- ============================================================
+-- 3. Nutrition log: one row per logged food or dish per day.
+--    Macros are SNAPSHOTTED at log time so history never shifts
+--    if a custom food/dish is edited later.
+-- ============================================================
+CREATE TABLE log_entry (
+  id             INTEGER PRIMARY KEY,
+  log_date       TEXT    NOT NULL,             -- 'YYYY-MM-DD' (local day)
+  source_type    TEXT    NOT NULL CHECK (source_type IN ('FOOD','DISH')),
+  food_id        INTEGER REFERENCES food(id),         -- when source_type = 'FOOD'
+  custom_dish_id INTEGER REFERENCES custom_dish(id),  -- when source_type = 'DISH'
+  grams          REAL,                          -- grams consumed (FOOD entries)
+  servings_used  REAL,                          -- portion consumed in persons (DISH entries)
+  kcal           REAL    NOT NULL,              -- snapshot of consumed macros...
+  protein_g      REAL    NOT NULL,              -- ...computed at log time
+  fat_g          REAL    NOT NULL,
+  carbs_g        REAL    NOT NULL,
+  photo_uri      TEXT,                          -- optional photo attached to this entry (local only)
+  created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+  CHECK (
+    (source_type = 'FOOD' AND food_id IS NOT NULL AND custom_dish_id IS NULL) OR
+    (source_type = 'DISH' AND custom_dish_id IS NOT NULL AND food_id IS NULL)
+  )
+);
+CREATE INDEX idx_log_date ON log_entry(log_date);
+
+-- ============================================================
+-- 4. Body composition: timestamped weight + measurements (cm).
+--    All metrics nullable so a record may set only some sites.
+-- ============================================================
+CREATE TABLE body_record (
+  id            INTEGER PRIMARY KEY,
+  recorded_at   TEXT NOT NULL DEFAULT (datetime('now')),  -- timestamp
+  weight_kg     REAL,
+  bicep_cm      REAL,
+  chest_cm      REAL,
+  waist_cm      REAL,
+  leg_both_cm   REAL,    -- legs (both)  } measurement set per PRD;
+  single_leg_cm REAL,    -- single leg   } confirm exact sites
+  CHECK (weight_kg IS NOT NULL OR bicep_cm IS NOT NULL OR chest_cm IS NOT NULL
+      OR waist_cm IS NOT NULL OR leg_both_cm IS NOT NULL OR single_leg_cm IS NOT NULL)
+);
+CREATE INDEX idx_body_recorded_at ON body_record(recorded_at);
+
+-- ============================================================
+-- 5. Profile & goals: a single row (id = 1). Current weight is
+--    read from the latest body_record; coefficients are editable
+--    (future in-app config) and default to the pinned values.
+-- ============================================================
+CREATE TABLE profile (
+  id                     INTEGER PRIMARY KEY CHECK (id = 1),
+  name                   TEXT,
+  sex                    TEXT CHECK (sex IN ('male','female')),
+  birth_date             TEXT,        -- 'YYYY-MM-DD'; age is derived
+  height_cm              REAL,
+  activity_level         TEXT CHECK (activity_level IN
+                           ('sedentary','lightly_active','moderately_active','very_active','extra_active')),
+  goal_type              TEXT CHECK (goal_type IN ('fat_loss','maintenance','muscle_gain')),
+  -- desired targets (drive per-metric goal progress bars, AC-OB-2) --
+  desired_weight_kg      REAL,
+  desired_bicep_cm       REAL,
+  desired_chest_cm       REAL,
+  desired_waist_cm       REAL,
+  desired_leg_both_cm    REAL,
+  desired_single_leg_cm  REAL,
+  -- configurable formula coefficients (default to the pinned values) --
+  calorie_adjustment_pct REAL,        -- e.g. -0.20 fat loss, 0 maintenance, +0.15 gain
+  protein_g_per_kg       REAL,        -- e.g. 2.2 fat loss / 1.8 gain / 1.4 maintenance
+  fat_g_per_kg           REAL,        -- e.g. 0.8 (floor/cap applied at compute time)
+  updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+**Notes**
+- **Curated categories (resolves open-Q5)** come straight from the flag columns: *good protein/carb/fat sources* = `high_protein` / `high_carbs` / `high_fat`; *low-/high-calorie* = `low_kcal` / `high_kcal`. The source classifies each metric as low **xor** high.
+- **kcal storage vs. computed totals**: `food.kcal` is stored as shipped in the spreadsheet (it can differ slightly from 4·P + 4·C + 9·F). Per *Goals & target formulas*, the app's **computed intake/target totals use the 4/4/9 rule on the macro grams** — `food.kcal` is for per-100 g display only. (Minor source/compute divergence is expected; flagged, not silently reconciled.)
+- **Custom dishes are not in `food`**, so they can't be nested as ingredients of other custom dishes (no recursion). Ingredients reference `food` rows (products, or — edge case — default dishes).
+- **Bilingual**: English + Ukrainian names and semicolon-split aliases are stored; FTS indexes both languages.
 
 ---
 
@@ -293,8 +459,8 @@ Rounding: display whole grams/kcal; round half up.
 
 ## Open questions / to confirm
 
-1. Exact structure of the source Excel (columns, units — assumed macros per 100 g) and how it's bundled.
+1. ~~Exact structure of the source Excel (columns, units — assumed macros per 100 g) and how it's bundled.~~ **Resolved:** single `Products` sheet, all values per 100 g; columns `category` (`PRODUCT`/`DISH`), `product_name`(`_ua`), `aliases`(`_ua`, semicolon-separated), `kcal`, `fat_g`, `protein_g`, `carbs_g`, + 8 curated-flag columns. Transformed into a prebuilt read-only SQLite asset at build time (see *SQLite schema*).
 2. Final formula coefficients and the list of selectable activity levels / goal types.
 3. Charting library choice.
 4. Whether any friends use iOS (determines if the $99/yr Apple account is needed).
-5. How curated-category membership is determined — a tag column in the source Excel, computed automatically from macro thresholds (e.g. kcal/100g, % protein), or a mix. WHO-based thresholds to be defined.
+5. ~~How curated-category membership is determined — a tag column in the source Excel, computed automatically from macro thresholds, or a mix.~~ **Resolved:** explicit per-metric flag columns in the source (`low_/high_` for kcal/fat/protein/carbs; each metric classified low **xor** high), copied into the `food` table. The WHO-based thresholds used to *populate* those flags in the spreadsheet still need documenting.
