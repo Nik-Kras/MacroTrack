@@ -1,22 +1,33 @@
 import * as SQLite from 'expo-sqlite';
 import { seedFoods, seedProfile } from '../data/seed';
 import { localDateKey, isoDaysAgo } from '../lib/dates';
+import { createLogger, logDuration } from '../lib/logger';
 import { addMacros, macrosForGrams } from '../lib/math';
 import { BodyRecord, CustomDish, Food, LogEntry, MacroTotals, Profile } from '../types';
 
 export type MacroDatabase = SQLite.SQLiteDatabase;
 
+const logger = createLogger('db');
+
 export async function openMacroDb() {
-  const db = await SQLite.openDatabaseAsync('macrotrack.db');
-  await migrate(db);
-  return db;
+  return logDuration('db', 'open macro database', async () => {
+    const db = await SQLite.openDatabaseAsync('macrotrack.db');
+    await migrate(db);
+    return db;
+  });
 }
 
 async function migrate(db: MacroDatabase) {
+  logger.info('migration check started');
   await db.execAsync('PRAGMA foreign_keys = ON;');
   const version = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version;');
-  if ((version?.user_version ?? 0) >= 1) return;
+  logger.info('database version read', { user_version: version?.user_version ?? 0 });
+  if ((version?.user_version ?? 0) >= 1) {
+    logger.info('migration skipped');
+    return;
+  }
 
+  logger.info('schema migration started');
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS food (
       id INTEGER PRIMARY KEY,
@@ -148,14 +159,18 @@ async function migrate(db: MacroDatabase) {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+  logger.info('schema migration completed');
 
   await seed(db);
   await db.execAsync('PRAGMA user_version = 1;');
+  logger.info('database version updated', { user_version: 1 });
 }
 
 async function seed(db: MacroDatabase) {
+  logger.info('seed check started');
   const foodCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM food;');
   if (!foodCount?.count) {
+    logger.info('food seed started', { count: seedFoods.length });
     for (const food of seedFoods) {
       await db.runAsync(
         `INSERT INTO food
@@ -185,10 +200,14 @@ async function seed(db: MacroDatabase) {
         ]
       );
     }
+    logger.info('food seed completed', { count: seedFoods.length });
+  } else {
+    logger.info('food seed skipped', { count: foodCount.count });
   }
 
   const profileCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM profile;');
   if (!profileCount?.count) {
+    logger.info('profile seed started');
     await db.runAsync(
       `INSERT INTO profile
        (id, name, sex, birth_date, height_cm, activity_level, goal_type, desired_weight_kg,
@@ -225,10 +244,14 @@ async function seed(db: MacroDatabase) {
        VALUES (?, 78.8, 36.5, 101, 84.5, 109, 55.5)`,
       [`${isoDaysAgo(7)}T08:00:00`]
     );
+    logger.info('profile seed completed');
+  } else {
+    logger.info('profile seed skipped', { count: profileCount.count });
   }
 
   const dishCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) AS count FROM custom_dish;');
   if (!dishCount?.count) {
+    logger.info('dish seed started');
     await db.runAsync(
       'INSERT INTO custom_dish (name, servings, notes) VALUES (?, ?, ?)',
       ['Chicken rice bowl', 2, 'Simple cutting staple']
@@ -252,15 +275,24 @@ async function seed(db: MacroDatabase) {
         [dish.id, chicken.id, 300, 1]
       );
     }
+    logger.info('dish seed completed', {
+      dish_created: Boolean(dish),
+      chicken_found: Boolean(chicken),
+      rice_found: Boolean(rice)
+    });
+  } else {
+    logger.info('dish seed skipped', { count: dishCount.count });
   }
 }
 
 export async function getProfile(db: MacroDatabase) {
-  return db.getFirstAsync<Profile>('SELECT * FROM profile WHERE id = 1');
+  return logDuration('db', 'get profile', () => db.getFirstAsync<Profile>('SELECT * FROM profile WHERE id = 1'));
 }
 
 export async function getLatestBodyRecord(db: MacroDatabase) {
-  return db.getFirstAsync<BodyRecord>('SELECT * FROM body_record ORDER BY recorded_at DESC LIMIT 1');
+  return logDuration('db', 'get latest body record', () =>
+    db.getFirstAsync<BodyRecord>('SELECT * FROM body_record ORDER BY recorded_at DESC LIMIT 1')
+  );
 }
 
 export async function getBodyRecords(db: MacroDatabase) {
