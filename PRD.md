@@ -134,6 +134,141 @@ Derive **deficit or surplus** over day / week / month / all-time by comparing lo
 
 ---
 
+## Acceptance criteria / test cases
+
+These scenarios **double as the v1 test suite** — each is intended to map onto an automated
+test, so the build should be driven against them (TDD-style). Every feature in *Main
+functionality* and every step in *Goals & target formulas* has at least one criterion.
+
+Numeric values use these **default coefficients** (default, configurable later — see open
+question #2): calorie adjustment fat loss **−20%** / maintenance **0%** / muscle gain **+15%**;
+protein **2.2 g/kg** (fat loss), **1.8 g/kg** (muscle gain), **1.4 g/kg** (maintenance); fat
+**0.8 g/kg** with floor `= max(20% of kcal, 0.5 g/kg)` and cap `= 35% of kcal`. All kcal are
+**computed from macros** at 4/4/9 kcal per g (protein/carbs/fat), not read from the source.
+Rounding: display whole grams/kcal; round half up.
+
+> **Canonical profile** (reused below): male, 80 kg, 180 cm, 30 y, moderately active (×1.55),
+> goal = fat loss. ⇒ BMR 1780, TDEE 2759, target 2207 kcal, protein 176 g, fat 64 g, carbs 232 g.
+
+### Onboarding, profile & goals — `AC-OB`
+
+- **AC-OB-1** — GIVEN a first launch · WHEN onboarding completes capturing sex, age, height,
+  current weight + measurements, desired weight + measurements, activity level, and goal type ·
+  THEN a profile is persisted locally AND daily targets are derived from it (see `AC-FM`) with no
+  manual target entry.
+- **AC-OB-2** — GIVEN current weight 80 kg and desired weight 75 kg · WHEN the profile screen
+  renders · THEN a per-metric progress bar shows progress from current toward desired (e.g. after
+  logging 78 kg the weight bar reads 40% of the 80→75 span).
+- **AC-OB-3** — GIVEN no internet connection and no account · WHEN the app is used end to end ·
+  THEN every feature works offline (no login, no network call required at runtime).
+
+### Goal & target formulas — `AC-FM`
+
+- **AC-FM-1 (BMR, male)** — GIVEN male, 80 kg, 180 cm, 30 y · THEN `BMR = 10·80 + 6.25·180 −
+  5·30 + 5 = 1780`.
+- **AC-FM-2 (BMR, female)** — GIVEN female, 60 kg, 165 cm, 28 y · THEN `BMR = 10·60 + 6.25·165 −
+  5·28 − 161 = 1330`.
+- **AC-FM-3 (TDEE / activity multipliers)** — GIVEN BMR 1780 · THEN TDEE = 2136 (sedentary
+  ×1.2), 2448 (lightly ×1.375), 2759 (moderately ×1.55), 3071 (very ×1.725), 3382 (extra ×1.9).
+- **AC-FM-4 (calorie target by goal)** — GIVEN TDEE 2759 · THEN target = 2207 (fat loss −20%),
+  2759 (maintenance 0%), 3173 (muscle gain +15%).
+- **AC-FM-5 (BMR floor)** — GIVEN female, 60 kg, 165 cm, 45 y, sedentary, fat loss −25%
+  (BMR 1245, TDEE 1494, raw target 1121) · WHEN the target is below `max(BMR, 1200)` · THEN it is
+  clamped up to 1245 (never below BMR; practical minimum ≈1200 women / 1500 men).
+- **AC-FM-6 (macro split — protein & fat set, carbs fill)** — GIVEN the canonical profile
+  (target 2207) · THEN protein `= 2.2·80 = 176 g` (704 kcal), fat `= 0.8·80 = 64 g` (576 kcal),
+  carbs `= (2207 − 704 − 576)/4 = 232 g`.
+- **AC-FM-7 (fat floor clamp)** — GIVEN target 2207 kcal, 80 kg, fat set to 0.5 g/kg (40 g =
+  16% of kcal, below the 20% floor) · THEN fat is raised to the floor `= max(2207·0.20/9,
+  0.5·80) = max(49, 40) = 49 g`; and fat is never above the cap `35%·2207/9 = 86 g`.
+- **AC-FM-8 (recalc on weight change)** — GIVEN the canonical profile · WHEN a new weight of
+  78 kg is logged · THEN targets recompute (BMR 1760, TDEE 2728, target 2182, protein 172 g) AND
+  the daily bars reflect the new allowances.
+
+### Food database & smart search — `AC-FD`
+
+- **AC-FD-1** — GIVEN the pre-seeded general database · THEN entries are read-only (cannot be
+  edited or deleted) and expose name + macros per 100 g.
+- **AC-FD-2** — GIVEN the user starts typing a food name · WHEN matches exist in either the
+  general or the user database · THEN fuzzy/autocomplete suggestions appear from both sources
+  combined.
+- **AC-FD-3** — GIVEN a user-created food/dish · THEN it is editable and surfaced in search
+  alongside general entries, and is stored only on-device.
+
+### Nutrition / macro logging — `AC-NL`
+
+- **AC-NL-1** — GIVEN chicken breast at 31 g protein / 3.6 g fat / 0 g carbs per 100 g · WHEN
+  150 g is logged · THEN the entry records +46.5 g protein, +5.4 g fat, +0 g carbs, +235 kcal
+  (`4·46.5 + 9·5.4`) AND today's totals increase by the same.
+- **AC-NL-2** — GIVEN a logged entry of 150 g · WHEN its grams are edited to 200 g · THEN the
+  entry's macros and today's totals rescale proportionally (protein 62 g, kcal ≈313).
+- **AC-NL-3** — GIVEN an item in today's log · WHEN it is long-pressed (~1 s) · THEN an inline
+  quick-edit for grams opens and saving updates totals immediately.
+- **AC-NL-4** — GIVEN a logged entry · WHEN it is removed · THEN today's totals decrement by
+  exactly that entry's macros.
+
+### Dishes — `AC-DI`
+
+- **AC-DI-1** — GIVEN a dish of {rice 200 g, chicken 300 g} for 2 persons · THEN macros are
+  computed from each ingredient's per-100 g values and shown **both total and per person**
+  (per-person = total / 2).
+- **AC-DI-2** — GIVEN the Dishes tab · THEN it renders a photo-forward gallery grid where each
+  card shows the dish photo and key macros (kcal/protein/carbs/fat).
+- **AC-DI-3** — GIVEN a dish detail view · WHEN the grams actually used are adjusted and **Use**
+  is tapped · THEN the rescaled dish is appended to today's log and the daily bars update.
+- **AC-DI-4** — GIVEN the create-dish action · WHEN ingredients (with grams), a serving/person
+  count, and a photo are provided · THEN a new dish is saved to the local user database.
+
+### Local photos — `AC-PH`
+
+- **AC-PH-1** — GIVEN a photo captured or picked for a dish or log entry · THEN the image file
+  is saved to local app storage and only its path is stored in the DB.
+- **AC-PH-2** — GIVEN any photo save or app operation · THEN no image is uploaded or shared and
+  no network request is made (images never leave the device).
+
+### Curated food categories — `AC-CT`
+
+- **AC-CT-1** — GIVEN the curated categories (protein/carb/fat sources, low-calorie,
+  high-calorie) · WHEN a category is opened · THEN it lists foods meeting that category's
+  definition (e.g. high-protein shows foods above the protein threshold).
+  `TODO(open-Q5)`: membership logic assumed *computed from macro thresholds*; revisit once
+  thresholds / tag-column decision is finalized.
+- **AC-CT-2** — GIVEN a "high protein, low calorie" need while cutting · WHEN that category is
+  browsed · THEN selecting a food routes into the normal logging flow (`AC-NL`).
+
+### Daily target bars — `AC-DB`
+
+- **AC-DB-1** — GIVEN the canonical targets (2207 kcal, 176 P / 232 C / 64 F) and today's log ·
+  THEN the Nutrition page shows four bars of current vs. allowed for kcal/protein/carbs/fat.
+- **AC-DB-2** — GIVEN 1104 kcal logged against a 2207 target · THEN the kcal bar fills ~50%;
+  AND when logged ≥ allowed the bar visibly caps/marks at 100%+ (over-target state).
+- **AC-DB-3** — GIVEN any daily bar · WHEN it is tapped · THEN the statistics page opens.
+
+### Statistics & charts — `AC-ST`
+
+- **AC-ST-1** — GIVEN logged intake and derived targets · THEN deficit/surplus `= intake −
+  target` is shown for day / week / month / all-time (e.g. 2000 logged vs 2207 → −207 deficit).
+- **AC-ST-2** — GIVEN a selected time span · THEN protein/carb/fat intake trend series and
+  weight/measurement trends render over that span.
+- **AC-ST-3** — GIVEN a span with no data · THEN the charts render an empty state without error.
+
+### Body composition tracking — `AC-BC`
+
+- **AC-BC-1** — GIVEN a body record · WHEN weight (kg) and measurements (bicep, chest, waist,
+  both legs, single leg, in cm) are entered · THEN each is stored timestamped.
+- **AC-BC-2** — GIVEN multiple records over time · THEN each metric shows history, a chart, and
+  trend dynamics over day / week / month / all-time.
+- **AC-BC-3** — GIVEN any input · THEN only metric units are accepted (kg / cm; no imperial).
+
+### Export — `AC-EX`
+
+- **AC-EX-1** — GIVEN a single day · WHEN exported (text and CSV) · THEN output includes
+  per-food detail (name, grams, per-item macros) plus day totals, and is shareable.
+- **AC-EX-2** — GIVEN a week or month · WHEN exported · THEN output contains macro totals only,
+  with **no per-food detail**.
+
+---
+
 ## Out of scope (v1)
 
 - User accounts, login, multi-device sync.
