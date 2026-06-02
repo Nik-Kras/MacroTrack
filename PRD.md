@@ -293,9 +293,13 @@ Derive **deficit or surplus** over day / week / month / all-time by comparing lo
 
 ## Deployment & distribution
 
-- **Build pipeline:** Expo **EAS Build** with `"distribution": "internal"`.
+- **Build pipeline:** Expo **EAS Build**. Android uses `"distribution": "internal"`; iOS uses a TestFlight-targeted profile (`eas submit`).
 - **Android:** EAS produces an `.apk`; share via link/QR for direct install. **Free**, no store, no device registration.
-- **iOS:** Requires an **Apple Developer account ($99/year)**. Preferred path is **TestFlight** (friends install via link, up to 10,000 testers; rebuild every ~90 days). Alternative is ad-hoc distribution (register each device UDID, max 100/year).
+- **iOS — confirmed in scope; TestFlight is the chosen path.** Some friends use iOS, so an **Apple Developer Program account ($99/year)** is required.
+  - **Why TestFlight (not ad-hoc):** friends join via a single public **TestFlight invite link** — no collecting/registering device UDIDs (ad-hoc caps at 100 devices/year and needs each UDID up front). TestFlight supports up to 10,000 external testers.
+  - **Flow:** `eas build --platform ios --profile <testflight>` → `eas submit --platform ios` (or upload via App Store Connect) → enable **external testing**. The **first external build needs a one-time Beta App Review** (lightweight, not full App Store review); subsequent builds typically pass automatically.
+  - **Friend onboarding:** install the **TestFlight app** from the App Store → tap the invite link → install MacroTrack. No Apple Developer account needed on their side.
+  - **Cadence:** TestFlight builds **expire after 90 days**, so plan a rebuild + resubmit roughly every ~90 days to keep testers running.
 - App stores (full public listing) are **out of scope** for v1.
 
 ---
@@ -462,5 +466,5 @@ Rounding: display whole grams/kcal; round half up.
 1. ~~Exact structure of the source Excel (columns, units — assumed macros per 100 g) and how it's bundled.~~ **Resolved:** single `Products` sheet, all values per 100 g; columns `category` (`PRODUCT`/`DISH`), `product_name`(`_ua`), `aliases`(`_ua`, semicolon-separated), `kcal`, `fat_g`, `protein_g`, `carbs_g`, + 8 curated-flag columns. Transformed into a prebuilt read-only SQLite asset at build time (see *SQLite schema*).
 2. Final formula coefficients and the list of selectable activity levels / goal types.
 3. Charting library choice.
-4. Whether any friends use iOS (determines if the $99/yr Apple account is needed).
+4. ~~Whether any friends use iOS (determines if the $99/yr Apple account is needed).~~ **Resolved:** yes — some friends use iOS, so the **$99/yr Apple Developer account is needed** and the v1 iOS path is **TestFlight** (invite-link distribution; see *Deployment & distribution*).
 5. ~~How curated-category membership is determined — a tag column in the source Excel, computed automatically from macro thresholds, or a mix.~~ **Resolved:** explicit per-metric flag columns in the source (`low_/high_` for kcal/fat/protein/carbs; each metric classified low **xor** high), copied into the `food` table. The WHO-based thresholds used to *populate* those flags in the spreadsheet still need documenting.
