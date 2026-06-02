@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "MacroTrack",
+    "slug": "macrotrack",
+    "scheme": "macrotrack",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#F7F3EA"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.nikkras.macrotrack",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "MacroTrack stores selected dish and log photos locally on this device.",
+        "NSCameraUsageDescription": "MacroTrack can attach locally stored photos to dishes and log entries."
+      }
+    },
+    "android": {
+      "package": "com.nikkras.macrotrack",
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-image-picker"
+    ]
+  }
+}
