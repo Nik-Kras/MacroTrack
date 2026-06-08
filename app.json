@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "MacroTrack",
+    "slug": "macrotrack",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "macrotrack",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nikkras.macrotrack"
+    },
+    "android": {
+      "package": "com.nikkras.macrotrack",
+      "adaptiveIcon": {
+        "backgroundColor": "#F7F3EA"
+      }
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-camera",
+      "expo-image-picker",
+      "expo-notifications"
+    ]
+  }
+}
