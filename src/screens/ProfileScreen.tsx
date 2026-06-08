@@ -1,181 +1,119 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { Plus } from 'lucide-react-native';
-import { MacroDatabase, addBodyRecord, getBodyRecords } from '../db/database';
-import { BodyRecord, Profile } from '../types';
-import { colors, shadow } from '../theme';
-import { computeTargets } from '../lib/math';
-import { ProgressBar } from '../components/ProgressBar';
-import { MiniChart } from '../components/MiniChart';
-import { Section } from '../components/Section';
-import { StatPill } from '../components/StatPill';
+import * as ImagePicker from "expo-image-picker";
+import { useEffect, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { MacroBar } from "../components/Bars";
+import { TrendChart } from "../components/TrendChart";
+import { latestWeight, projectTargetDate, weightProgress } from "../domain/analytics";
+import { roundHalfUp } from "../domain/rounding";
+import type { BodyRecord, MacroTotals, Profile } from "../domain/types";
+import { getBodyRecords, saveBodyRecord } from "../db/repository";
 
 type Props = {
-  db: MacroDatabase;
   profile: Profile;
-  latestBody: BodyRecord;
-  refreshToken: number;
+  targets: MacroTotals;
+  averageDeficit: number;
   onChanged: () => void;
 };
 
-const fields = [
-  ['weight_kg', 'Weight', 'kg'],
-  ['bicep_cm', 'Bicep', 'cm'],
-  ['chest_cm', 'Chest', 'cm'],
-  ['waist_cm', 'Waist', 'cm'],
-  ['leg_both_cm', 'Both legs', 'cm'],
-  ['single_leg_cm', 'Single leg', 'cm']
-] as const;
-
-export function ProfileScreen({ db, profile, latestBody, refreshToken, onChanged }: Props) {
+export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: Props) => {
   const [records, setRecords] = useState<BodyRecord[]>([]);
-  const [draft, setDraft] = useState<Record<string, string>>({
-    weight_kg: String(latestBody.weight_kg ?? ''),
-    bicep_cm: String(latestBody.bicep_cm ?? ''),
-    chest_cm: String(latestBody.chest_cm ?? ''),
-    waist_cm: String(latestBody.waist_cm ?? ''),
-    leg_both_cm: String(latestBody.leg_both_cm ?? ''),
-    single_leg_cm: String(latestBody.single_leg_cm ?? '')
-  });
+  const [weight, setWeight] = useState("");
+  const [waist, setWaist] = useState("");
+  const [bicep, setBicep] = useState("");
+  const [chest, setChest] = useState("");
+  const [legs, setLegs] = useState("");
+  const [singleLeg, setSingleLeg] = useState("");
+  const [photoUri, setPhotoUri] = useState<string | undefined>();
 
-  const refresh = useCallback(async () => setRecords(await getBodyRecords(db)), [db]);
+  const refresh = async () => setRecords(await getBodyRecords());
 
   useEffect(() => {
-    refresh();
-  }, [refresh, refreshToken]);
+    refresh().catch(console.error);
+  }, []);
 
-  const targets = useMemo(() => computeTargets(profile, latestBody.weight_kg ?? 80), [profile, latestBody.weight_kg]);
+  const currentWeight = latestWeight(records);
+  const projection = projectTargetDate(currentWeight, profile.desired_weight_kg, averageDeficit);
 
-  async function saveBodyRecord() {
-    await addBodyRecord(db, {
-      weight_kg: num(draft.weight_kg),
-      bicep_cm: num(draft.bicep_cm),
-      chest_cm: num(draft.chest_cm),
-      waist_cm: num(draft.waist_cm),
-      leg_both_cm: num(draft.leg_both_cm),
-      single_leg_cm: num(draft.single_leg_cm)
+  const pickPhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+    if (!result.canceled) setPhotoUri(result.assets[0]?.uri);
+  };
+
+  const save = async () => {
+    await saveBodyRecord({
+      weight_kg: Number(weight) || null,
+      waist_cm: Number(waist) || null,
+      bicep_cm: Number(bicep) || null,
+      chest_cm: Number(chest) || null,
+      leg_both_cm: Number(legs) || null,
+      single_leg_cm: Number(singleLeg) || null,
+      photo_uri: photoUri ?? null
     });
+    setWeight("");
+    setWaist("");
+    setBicep("");
+    setChest("");
+    setLegs("");
+    setSingleLeg("");
+    setPhotoUri(undefined);
     await refresh();
     onChanged();
-  }
+  };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.hero}>
+    <ScrollView contentContainerStyle={styles.content}>
+      <View>
         <Text style={styles.eyebrow}>Local profile</Text>
-        <Text style={styles.title}>{profile.name ?? 'MacroTrack'}</Text>
-        <View style={styles.pills}>
-          <StatPill label="BMR" value={`${targets.bmr}`} />
-          <StatPill label="TDEE" value={`${targets.tdee}`} />
-          <StatPill label="Goal" value={labelGoal(profile.goal_type)} />
-        </View>
+        <Text style={styles.title}>{profile.name || "MacroTrack"}</Text>
+      </View>
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Targets</Text>
+        <Text style={styles.meta}>
+          {profile.goal_type.replace("_", " ")} · {roundHalfUp(currentWeight)} kg · {roundHalfUp(targets.kcal)} kcal
+        </Text>
+        <MacroBar label="Weight goal" value={weightProgress(80, currentWeight, profile.desired_weight_kg) * 100} target={100} unit="%" tone="green" />
+        <Text style={styles.meta}>
+          Desired {profile.desired_weight_kg} kg
+          {projection ? ` · projected ${projection.toLocaleDateString()}` : " · projection needs more stable history"}
+        </Text>
       </View>
 
-      <Section title="Goal progress">
-        <View style={styles.card}>
-          <GoalProgress label="Weight" current={latestBody.weight_kg} start={records[0]?.weight_kg ?? latestBody.weight_kg} target={profile.desired_weight_kg} unit="kg" />
-          <GoalProgress label="Bicep" current={latestBody.bicep_cm} start={records[0]?.bicep_cm ?? latestBody.bicep_cm} target={profile.desired_bicep_cm} unit="cm" />
-          <GoalProgress label="Chest" current={latestBody.chest_cm} start={records[0]?.chest_cm ?? latestBody.chest_cm} target={profile.desired_chest_cm} unit="cm" />
-          <GoalProgress label="Waist" current={latestBody.waist_cm} start={records[0]?.waist_cm ?? latestBody.waist_cm} target={profile.desired_waist_cm} unit="cm" />
+      <View style={styles.form}>
+        <Text style={styles.panelTitle}>Add body record</Text>
+        <View style={styles.grid}>
+          <TextInput value={weight} onChangeText={setWeight} placeholder="Weight kg" keyboardType="numeric" style={styles.input} />
+          <TextInput value={waist} onChangeText={setWaist} placeholder="Waist cm" keyboardType="numeric" style={styles.input} />
+          <TextInput value={bicep} onChangeText={setBicep} placeholder="Bicep cm" keyboardType="numeric" style={styles.input} />
+          <TextInput value={chest} onChangeText={setChest} placeholder="Chest cm" keyboardType="numeric" style={styles.input} />
+          <TextInput value={legs} onChangeText={setLegs} placeholder="Both legs cm" keyboardType="numeric" style={styles.input} />
+          <TextInput value={singleLeg} onChangeText={setSingleLeg} placeholder="Single leg cm" keyboardType="numeric" style={styles.input} />
         </View>
-      </Section>
-
-      <Section title="Add body record">
-        <View style={styles.formGrid}>
-          {fields.map(([key, label, unit]) => (
-            <View key={key} style={styles.field}>
-              <Text style={styles.fieldLabel}>{label}</Text>
-              <TextInput
-                keyboardType="decimal-pad"
-                value={draft[key]}
-                onChangeText={(value) => setDraft((current) => ({ ...current, [key]: value }))}
-                style={styles.input}
-              />
-              <Text style={styles.unit}>{unit}</Text>
-            </View>
-          ))}
-        </View>
-        <Pressable style={styles.primaryButton} onPress={saveBodyRecord}>
-          <Plus size={18} color={colors.card} />
+        <Pressable style={styles.secondary} onPress={pickPhoto}>
+          <Text style={styles.secondaryText}>{photoUri ? "Progress photo attached" : "Attach local progress photo"}</Text>
+        </Pressable>
+        <Pressable style={styles.primary} onPress={save}>
           <Text style={styles.primaryText}>Save record</Text>
         </Pressable>
-      </Section>
+      </View>
 
-      <Section title="Weight trend">
-        <View style={styles.card}>
-          <MiniChart values={records.map((record) => record.weight_kg ?? NaN)} color={colors.green} />
-        </View>
-      </Section>
-
-      <Section title="Measurement trend">
-        <View style={styles.card}>
-          <MiniChart values={records.map((record) => record.waist_cm ?? NaN)} color={colors.coral} emptyLabel="Add waist records to chart" />
-        </View>
-      </Section>
+      <TrendChart title="Weight trend" values={records.map((record) => record.weight_kg).filter((value): value is number => value !== null)} suffix="kg" color="#188A5B" />
+      <TrendChart title="Waist trend" values={records.map((record) => record.waist_cm).filter((value): value is number => value !== null)} suffix="cm" color="#C2410C" />
     </ScrollView>
   );
-}
-
-function GoalProgress({
-  label,
-  current,
-  start,
-  target,
-  unit
-}: {
-  label: string;
-  current: number | null;
-  start: number | null;
-  target: number | null;
-  unit: string;
-}) {
-  if (current == null || start == null || target == null) return null;
-  const span = target - start;
-  const progress = span === 0 ? 1 : (current - start) / span;
-  return <ProgressBar label={label} value={Math.max(0, Math.min(1, progress)) * 100} target={100} unit="%" tone={colors.lime} />;
-}
-
-function num(value: string) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function labelGoal(goal: Profile['goal_type']) {
-  return goal.replace('_', ' ');
-}
+};
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
-  content: { padding: 18, paddingBottom: 36 },
-  hero: { paddingTop: 8, paddingBottom: 18, gap: 10 },
-  eyebrow: { color: colors.green, fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
-  title: { color: colors.ink, fontSize: 34, fontWeight: '900' },
-  pills: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  card: { backgroundColor: colors.card, borderRadius: 8, padding: 16, gap: 16, ...shadow },
-  formGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  field: { width: '48%', gap: 6 },
-  fieldLabel: { color: colors.ink, fontWeight: '800' },
-  input: {
-    minHeight: 48,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    color: colors.ink,
-    fontSize: 16,
-    fontWeight: '900',
-    backgroundColor: colors.card
-  },
-  unit: { color: colors.muted, fontSize: 12, fontWeight: '700' },
-  primaryButton: {
-    minHeight: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    backgroundColor: colors.green
-  },
-  primaryText: { color: colors.card, fontWeight: '900' }
+  content: { padding: 18, gap: 18, backgroundColor: "#FFFCF7" },
+  eyebrow: { color: "#6B7280", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+  title: { color: "#111827", fontSize: 30, fontWeight: "900", letterSpacing: 0 },
+  panel: { gap: 10 },
+  panelTitle: { color: "#111827", fontSize: 18, fontWeight: "900" },
+  meta: { color: "#6B7280", fontSize: 13 },
+  form: { gap: 10 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  input: { flexBasis: "48%", minHeight: 46, borderWidth: 1, borderColor: "#DED6CA", borderRadius: 8, paddingHorizontal: 12 },
+  secondary: { minHeight: 44, borderRadius: 8, backgroundColor: "#EDE7DA", alignItems: "center", justifyContent: "center" },
+  secondaryText: { color: "#111827", fontWeight: "800" },
+  primary: { minHeight: 46, borderRadius: 8, backgroundColor: "#111827", alignItems: "center", justifyContent: "center" },
+  primaryText: { color: "#FFFFFF", fontWeight: "900" }
 });

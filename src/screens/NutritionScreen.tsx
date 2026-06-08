@@ -1,461 +1,309 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { useEffect, useMemo, useState } from "react";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { MacroBar } from "../components/Bars";
+import { streakFromDates } from "../domain/analytics";
+import { roundHalfUp } from "../domain/rounding";
+import type { Food, LogEntry, MacroTotals } from "../domain/types";
 import {
-  Alert,
-  FlatList,
-  Modal,
-  Pressable,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Text,
-  TextInput,
-  View
-} from 'react-native';
-import { BarChart3, Plus, Search, Trash2 } from 'lucide-react-native';
-import { MacroDatabase, addFoodLog, foodsByFlag, getTodayLog, removeLogEntry, searchFoods, totalsFromLog, updateFoodLogGrams } from '../db/database';
-import { computeTargets, formatMacro } from '../lib/math';
-import { BodyRecord, Food, LogEntry, Profile } from '../types';
-import { colors, shadow } from '../theme';
-import { ProgressBar } from '../components/ProgressBar';
-import { Section } from '../components/Section';
-import { StatPill } from '../components/StatPill';
-import { localDateKey } from '../lib/dates';
-import { exportDayCsv, exportDayText } from '../services/export';
+  addFoodLog,
+  copyPreviousDay,
+  createSavedMealFromToday,
+  dailySummaryCsv,
+  deleteLogEntry,
+  findFoodByBarcode,
+  getFrequentFoods,
+  getLoggedDates,
+  getLogEntries,
+  getRecentFoods,
+  searchFoods,
+  updateFoodLogGrams
+} from "../db/repository";
+import { shareTextFile } from "../utils/export";
 
 type Props = {
-  db: MacroDatabase;
-  profile: Profile;
-  latestBody: BodyRecord;
-  onOpenStats: () => void;
-  refreshToken: number;
+  totals: MacroTotals;
+  targets: MacroTotals;
   onChanged: () => void;
+  onStats: () => void;
 };
 
-const categories = [
-  { label: 'Protein', flag: 'high_protein' as const },
-  { label: 'Carbs', flag: 'high_carbs' as const },
-  { label: 'Fats', flag: 'high_fat' as const },
-  { label: 'Low kcal', flag: 'low_kcal' as const },
-  { label: 'High kcal', flag: 'high_kcal' as const }
+const categories: Array<{ label: string; key: keyof Food }> = [
+  { label: "Protein", key: "high_protein" },
+  { label: "Carbs", key: "high_carbs" },
+  { label: "Fats", key: "high_fat" },
+  { label: "Low kcal", key: "low_kcal" },
+  { label: "High kcal", key: "high_kcal" }
 ];
 
-export function NutritionScreen({ db, profile, latestBody, onOpenStats, refreshToken, onChanged }: Props) {
-  const [log, setLog] = useState<LogEntry[]>([]);
+export const NutritionScreen = ({ totals, targets, onChanged, onStats }: Props) => {
+  const [query, setQuery] = useState("");
+  const [activeList, setActiveList] = useState<"all" | "recent" | "frequent" | "mine">("all");
+  const [category, setCategory] = useState<keyof Food | undefined>("high_protein");
   const [foods, setFoods] = useState<Food[]>([]);
-  const [query, setQuery] = useState('');
-  const [selectedFood, setSelectedFood] = useState<Food | null>(null);
-  const [grams, setGrams] = useState('150');
-  const [quickEdit, setQuickEdit] = useState<LogEntry | null>(null);
+  const [log, setLog] = useState<LogEntry[]>([]);
+  const [streak, setStreak] = useState(0);
+  const [pendingFood, setPendingFood] = useState<Food | null>(null);
+  const [pendingEntry, setPendingEntry] = useState<LogEntry | null>(null);
+  const [gramsText, setGramsText] = useState("100");
+  const [barcodeText, setBarcodeText] = useState("");
+  const [showBarcode, setShowBarcode] = useState(false);
 
-  const latestWeight = latestBody.weight_kg ?? 80;
-  const targets = useMemo(() => computeTargets(profile, latestWeight), [profile, latestWeight]);
-  const totals = useMemo(() => totalsFromLog(log), [log]);
+  const remaining = Math.round(targets.kcal - totals.kcal);
 
-  const refresh = useCallback(async () => {
-    const [nextLog, nextFoods] = await Promise.all([getTodayLog(db), searchFoods(db, query)]);
-    setLog(nextLog);
-    setFoods(nextFoods);
-  }, [db, query]);
+  const refresh = async () => {
+    setLog(await getLogEntries());
+    setStreak(streakFromDates(await getLoggedDates()));
+    if (activeList === "recent") setFoods(await getRecentFoods());
+    else if (activeList === "frequent") setFoods(await getFrequentFoods());
+    else setFoods(await searchFoods(query, activeList === "mine" ? undefined : category));
+  };
 
   useEffect(() => {
-    refresh();
-  }, [refresh, refreshToken]);
+    refresh().catch(console.error);
+  }, [query, activeList, category]);
 
-  async function addSelectedFood() {
-    const amount = Number(grams);
-    if (!selectedFood || !Number.isFinite(amount) || amount <= 0) return;
-    await addFoodLog(db, selectedFood, amount);
-    setSelectedFood(null);
-    setQuery('');
+  const confirmFood = async () => {
+    if (!pendingFood) return;
+    const grams = Number(gramsText);
+    if (!Number.isFinite(grams) || grams <= 0) return;
+    await addFoodLog(pendingFood, grams);
+    setPendingFood(null);
     await refresh();
     onChanged();
-  }
+  };
 
-  async function saveQuickEdit() {
-    const amount = Number(grams);
-    if (!quickEdit || !Number.isFinite(amount) || amount <= 0) return;
-    await updateFoodLogGrams(db, quickEdit, amount);
-    setQuickEdit(null);
+  const scanBarcode = async () => {
+    const barcode = barcodeText;
+    if (!barcode.trim()) return;
+    const food = await findFoodByBarcode(barcode.trim());
+    if (food) {
+      setPendingFood(food);
+      setGramsText("100");
+      setShowBarcode(false);
+      setBarcodeText("");
+    } else {
+      Alert.alert("Unknown barcode", "No local match. Create a custom food with this barcode in a future edit flow.");
+    }
+  };
+
+  const editEntry = async (entry: LogEntry) => {
+    if (entry.source_type !== "FOOD") return;
+    setPendingEntry(entry);
+    setGramsText(String(entry.grams ?? 100));
+  };
+
+  const confirmEdit = async () => {
+    if (!pendingEntry) return;
+    const grams = Number(gramsText);
+    if (!Number.isFinite(grams) || grams <= 0) return;
+    await updateFoodLogGrams(pendingEntry, grams);
+    setPendingEntry(null);
     await refresh();
     onChanged();
-  }
+  };
 
-  async function showCategory(flag: (typeof categories)[number]['flag']) {
-    const matches = await foodsByFlag(db, flag);
-    setFoods(matches);
-    setQuery('');
-  }
+  const exportDay = async () => {
+    const csv = dailySummaryCsv(log);
+    await shareTextFile("macrotrack-day.csv", csv);
+  };
 
-  async function shareDay() {
-    const text = `${exportDayText(localDateKey(), log)}\n\nCSV\n${exportDayCsv(localDateKey(), log)}`;
-    await Share.share({ message: text });
-  }
+  const filteredFoods = useMemo(
+    () => (activeList === "mine" ? foods.filter((food) => food.is_seed === 0) : foods),
+    [foods, activeList]
+  );
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Today</Text>
-        <Text style={styles.title}>Macro ledger</Text>
-        <View style={styles.pills}>
-          <StatPill label="Target" value={`${targets.kcal} kcal`} />
-          <StatPill label="Left" value={`${Math.round(targets.kcal - totals.kcal)} kcal`} />
-          <StatPill label="Weight" value={`${latestWeight} kg`} />
+    <ScrollView contentContainerStyle={styles.content}>
+      <Pressable style={styles.hero} onPress={onStats}>
+        <Text style={styles.heroLabel}>Calories remaining</Text>
+        <Text style={[styles.remaining, remaining < 0 && styles.over]}>{remaining}</Text>
+        <Text style={styles.equation}>
+          {roundHalfUp(targets.kcal)} target - {roundHalfUp(totals.kcal)} eaten
+        </Text>
+        <View style={styles.bars}>
+          <MacroBar label="kcal" value={totals.kcal} target={targets.kcal} unit="kcal" tone="green" />
+          <MacroBar label="Protein" value={totals.protein_g} target={targets.protein_g} unit="g" tone="blue" />
+          <MacroBar label="Carbs" value={totals.carbs_g} target={targets.carbs_g} unit="g" tone="amber" />
+          <MacroBar label="Fat" value={totals.fat_g} target={targets.fat_g} unit="g" tone="red" />
         </View>
+        <View style={styles.streakRow}>
+          <Ionicons name="flame-outline" size={18} color="#C2410C" />
+          <Text style={styles.streak}>{streak} day streak</Text>
+        </View>
+      </Pressable>
+
+      <View style={styles.searchRow}>
+        <TextInput value={query} onChangeText={setQuery} placeholder="Search food or aliases" style={styles.search} />
+        <Pressable style={styles.iconButton} onPress={() => setShowBarcode((value) => !value)}>
+          <Ionicons name="barcode-outline" size={22} color="#111827" />
+        </Pressable>
       </View>
 
-      <Section title="Daily targets">
-        <Pressable style={styles.targetCard} onPress={onOpenStats}>
-          <ProgressBar label="Kcal" value={totals.kcal} target={targets.kcal} unit="kcal" tone={colors.green} onPress={onOpenStats} />
-          <ProgressBar label="Protein" value={totals.protein_g} target={targets.protein_g} unit="g" tone={colors.coral} onPress={onOpenStats} />
-          <ProgressBar label="Carbs" value={totals.carbs_g} target={targets.carbs_g} unit="g" tone={colors.blue} onPress={onOpenStats} />
-          <ProgressBar label="Fat" value={totals.fat_g} target={targets.fat_g} unit="g" tone={colors.gold} onPress={onOpenStats} />
-        </Pressable>
-      </Section>
+      {showBarcode ? (
+        <View style={styles.searchRow}>
+          <TextInput value={barcodeText} onChangeText={setBarcodeText} placeholder="Offline barcode" style={styles.search} />
+          <Pressable style={styles.confirm} onPress={scanBarcode}>
+            <Text style={styles.confirmText}>Lookup</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
-      <Section title="Add food">
-        <View style={styles.searchBox}>
-          <Search size={18} color={colors.muted} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search chicken, rice, yogurt..."
-            placeholderTextColor={colors.muted}
-            style={styles.searchInput}
-          />
-        </View>
-        <View style={styles.categoryRow}>
-          {categories.map((category) => (
-            <Pressable key={category.flag} style={styles.categoryButton} onPress={() => showCategory(category.flag)}>
-              <Text style={styles.categoryText}>{category.label}</Text>
+      <View style={styles.tabs}>
+        {(["all", "recent", "frequent", "mine"] as const).map((tab) => (
+          <Pressable key={tab} onPress={() => setActiveList(tab)} style={[styles.pill, activeList === tab && styles.pillActive]}>
+            <Text style={[styles.pillText, activeList === tab && styles.pillTextActive]}>{tab}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+        {categories.map((item) => (
+          <Pressable
+            key={item.label}
+            onPress={() => setCategory(category === item.key ? undefined : item.key)}
+            style={[styles.category, category === item.key && styles.categoryActive]}
+          >
+            <Text style={[styles.categoryText, category === item.key && styles.categoryTextActive]}>{item.label}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {pendingFood || pendingEntry ? (
+        <View style={styles.inlineEditor}>
+          <Text style={styles.editorTitle}>{pendingFood ? `Log ${pendingFood.name}` : `Edit ${pendingEntry?.name}`}</Text>
+          <View style={styles.editorRow}>
+            <TextInput value={gramsText} onChangeText={setGramsText} keyboardType="numeric" style={styles.gramsInput} />
+            <Pressable style={styles.confirm} onPress={pendingFood ? confirmFood : confirmEdit}>
+              <Text style={styles.confirmText}>{pendingFood ? "Add" : "Save"}</Text>
             </Pressable>
-          ))}
-        </View>
-        <FlatList
-          data={foods}
-          keyExtractor={(item) => String(item.id)}
-          scrollEnabled={false}
-          renderItem={({ item }) => (
             <Pressable
-              style={styles.foodRow}
+              style={styles.cancel}
               onPress={() => {
-                setSelectedFood(item);
-                setGrams('150');
+                setPendingFood(null);
+                setPendingEntry(null);
               }}
             >
-              <View style={styles.foodMain}>
-                <Text style={styles.foodName}>{item.name}</Text>
-                <Text style={styles.foodMeta}>{item.category} · per 100 g</Text>
-              </View>
-              <Text style={styles.foodMacro}>
-                {formatMacro(item.protein_g)}P {formatMacro(item.carbs_g)}C {formatMacro(item.fat_g)}F
-              </Text>
+              <Text style={styles.cancelText}>Cancel</Text>
             </Pressable>
-          )}
-        />
-      </Section>
-
-      <Section title="Today's log">
-        {log.length === 0 ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyText}>No foods logged for today.</Text>
           </View>
-        ) : (
-          log.map((entry) => (
+        </View>
+      ) : null}
+
+      <View style={styles.section}>
+        <Text style={styles.title}>Foods</Text>
+        {filteredFoods.slice(0, 12).map((food) => (
+          <Pressable
+            key={food.id}
+            onPress={() => {
+              setPendingFood(food);
+              setGramsText("100");
+            }}
+            style={styles.cell}
+          >
+            <View>
+              <Text style={styles.cellTitle}>{food.name}</Text>
+              <Text style={styles.meta}>
+                {food.kind.toLowerCase()} · {roundHalfUp(food.kcal)} kcal / 100 g · P {food.protein_g} C {food.carbs_g} F{" "}
+                {food.fat_g}
+              </Text>
+            </View>
+            <Ionicons name="add-circle-outline" size={24} color="#188A5B" />
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.actions}>
+        <Pressable
+          style={styles.action}
+          onPress={async () => {
+            await copyPreviousDay();
+            await refresh();
+            onChanged();
+          }}
+        >
+          <Text style={styles.actionText}>Copy yesterday</Text>
+        </Pressable>
+        <Pressable
+          style={styles.action}
+          onPress={async () => {
+            await createSavedMealFromToday("Saved from today");
+            Alert.alert("Saved meal", "Today's entries were saved as a reusable meal.");
+          }}
+        >
+          <Text style={styles.actionText}>Save as meal</Text>
+        </Pressable>
+        <Pressable style={styles.action} onPress={exportDay}>
+          <Text style={styles.actionText}>Export day</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.title}>Today</Text>
+        {log.length === 0 ? <Text style={styles.empty}>No foods logged yet.</Text> : null}
+        {log.map((entry) => (
+          <Pressable key={entry.id} onLongPress={() => editEntry(entry)} style={styles.cell}>
+            <View>
+              <Text style={styles.cellTitle}>{entry.name}</Text>
+              <Text style={styles.meta}>
+                {entry.grams ? `${roundHalfUp(entry.grams)} g · ` : `${entry.servings_used} serving · `}
+                {roundHalfUp(entry.kcal)} kcal · P {roundHalfUp(entry.protein_g)} C {roundHalfUp(entry.carbs_g)} F{" "}
+                {roundHalfUp(entry.fat_g)}
+              </Text>
+            </View>
             <Pressable
-              key={entry.id}
-              style={styles.logRow}
-              delayLongPress={1000}
-              onLongPress={() => {
-                setQuickEdit(entry);
-                setGrams(String(entry.grams ?? 100));
+              onPress={async () => {
+                await deleteLogEntry(entry.id);
+                await refresh();
+                onChanged();
               }}
             >
-              <View style={styles.foodMain}>
-                <Text style={styles.foodName}>{entry.name}</Text>
-                <Text style={styles.foodMeta}>
-                  {entry.source_type === 'FOOD' ? `${entry.grams} g` : `${entry.servings_used} serving`} · {formatMacro(entry.kcal)} kcal
-                </Text>
-              </View>
-              <Pressable
-                style={styles.iconButton}
-                onPress={() =>
-                  Alert.alert('Remove entry?', entry.name, [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Remove',
-                      style: 'destructive',
-                      onPress: async () => {
-                        await removeLogEntry(db, entry.id);
-                        await refresh();
-                        onChanged();
-                      }
-                    }
-                  ])
-                }
-              >
-                <Trash2 size={18} color={colors.danger} />
-              </Pressable>
+              <Ionicons name="trash-outline" size={21} color="#9A3412" />
             </Pressable>
-          ))
-        )}
-        <View style={styles.actionRow}>
-          <Pressable style={styles.primaryButton} onPress={shareDay}>
-            <Text style={styles.primaryText}>Export day</Text>
           </Pressable>
-          <Pressable style={styles.secondaryButton} onPress={onOpenStats}>
-            <BarChart3 size={18} color={colors.ink} />
-            <Text style={styles.secondaryText}>Stats</Text>
-          </Pressable>
-        </View>
-      </Section>
-
-      <MacroModal
-        title={selectedFood ? `Log ${selectedFood.name}` : quickEdit ? `Edit ${quickEdit.name}` : ''}
-        visible={Boolean(selectedFood || quickEdit)}
-        grams={grams}
-        setGrams={setGrams}
-        onCancel={() => {
-          setSelectedFood(null);
-          setQuickEdit(null);
-        }}
-        onSave={selectedFood ? addSelectedFood : saveQuickEdit}
-        saveLabel={selectedFood ? 'Add' : 'Save'}
-      />
+        ))}
+      </View>
     </ScrollView>
   );
-}
-
-function MacroModal({
-  title,
-  visible,
-  grams,
-  setGrams,
-  onCancel,
-  onSave,
-  saveLabel
-}: {
-  title: string;
-  visible: boolean;
-  grams: string;
-  setGrams: (value: string) => void;
-  onCancel: () => void;
-  onSave: () => void;
-  saveLabel: string;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={styles.modalShade}>
-        <View style={styles.modal}>
-          <Text style={styles.modalTitle}>{title}</Text>
-          <TextInput keyboardType="decimal-pad" value={grams} onChangeText={setGrams} style={styles.gramsInput} />
-          <Text style={styles.modalHint}>grams consumed</Text>
-          <View style={styles.actionRow}>
-            <Pressable style={styles.secondaryButton} onPress={onCancel}>
-              <Text style={styles.secondaryText}>Cancel</Text>
-            </Pressable>
-            <Pressable style={styles.primaryButton} onPress={onSave}>
-              <Plus size={18} color="#FFFDF8" />
-              <Text style={styles.primaryText}>{saveLabel}</Text>
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
+};
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.paper
-  },
-  content: {
-    padding: 18,
-    paddingBottom: 36
-  },
-  hero: {
-    paddingTop: 8,
-    paddingBottom: 18,
-    gap: 10
-  },
-  eyebrow: {
-    color: colors.green,
-    fontSize: 12,
-    fontWeight: '900',
-    textTransform: 'uppercase'
-  },
-  title: {
-    color: colors.ink,
-    fontSize: 34,
-    fontWeight: '900'
-  },
-  pills: {
-    flexDirection: 'row',
-    gap: 8,
-    flexWrap: 'wrap'
-  },
-  targetCard: {
-    backgroundColor: colors.card,
-    borderRadius: 8,
-    padding: 16,
-    gap: 16,
-    ...shadow
-  },
-  searchBox: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    backgroundColor: colors.card
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.ink,
-    fontSize: 16,
-    fontWeight: '600'
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8
-  },
-  categoryButton: {
-    borderRadius: 8,
-    backgroundColor: '#E9EDD8',
-    paddingVertical: 9,
-    paddingHorizontal: 11
-  },
-  categoryText: {
-    color: colors.ink,
-    fontSize: 12,
-    fontWeight: '800'
-  },
-  foodRow: {
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-    paddingVertical: 12
-  },
-  foodMain: {
-    flex: 1,
-    gap: 4
-  },
-  foodName: {
-    color: colors.ink,
-    fontSize: 16,
-    fontWeight: '800'
-  },
-  foodMeta: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: '600'
-  },
-  foodMacro: {
-    color: colors.green,
-    fontSize: 13,
-    fontWeight: '900'
-  },
-  logRow: {
-    minHeight: 66,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.line,
-    paddingVertical: 12
-  },
-  iconButton: {
-    width: 38,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-    backgroundColor: '#F1E4DA'
-  },
-  empty: {
-    minHeight: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.line,
-    borderRadius: 8
-  },
-  emptyText: {
-    color: colors.muted,
-    fontWeight: '700'
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center'
-  },
-  primaryButton: {
-    minHeight: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    backgroundColor: colors.green
-  },
-  primaryText: {
-    color: colors.card,
-    fontWeight: '900'
-  },
-  secondaryButton: {
-    minHeight: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: colors.line,
-    backgroundColor: colors.card
-  },
-  secondaryText: {
-    color: colors.ink,
-    fontWeight: '900'
-  },
-  modalShade: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 22,
-    backgroundColor: 'rgba(23,32,26,0.35)'
-  },
-  modal: {
-    borderRadius: 8,
-    backgroundColor: colors.card,
-    padding: 18,
-    gap: 12
-  },
-  modalTitle: {
-    color: colors.ink,
-    fontSize: 20,
-    fontWeight: '900'
-  },
-  gramsInput: {
-    height: 58,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.line,
-    paddingHorizontal: 14,
-    color: colors.ink,
-    fontSize: 24,
-    fontWeight: '900'
-  },
-  modalHint: {
-    color: colors.muted,
-    fontWeight: '700'
-  }
+  content: { padding: 18, gap: 18, backgroundColor: "#FFFCF7" },
+  hero: { gap: 10, paddingBottom: 4 },
+  heroLabel: { color: "#6B7280", fontSize: 13, fontWeight: "800", textTransform: "uppercase" },
+  remaining: { fontSize: 56, fontWeight: "900", color: "#111827", letterSpacing: 0 },
+  over: { color: "#C2410C" },
+  equation: { color: "#4B5563", fontSize: 15 },
+  bars: { gap: 12, marginTop: 6 },
+  streakRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  streak: { color: "#111827", fontWeight: "800" },
+  searchRow: { flexDirection: "row", gap: 8 },
+  search: { flex: 1, minHeight: 46, borderWidth: 1, borderColor: "#DED6CA", borderRadius: 8, paddingHorizontal: 13 },
+  iconButton: { width: 46, height: 46, borderRadius: 8, borderWidth: 1, borderColor: "#DED6CA", alignItems: "center", justifyContent: "center" },
+  tabs: { flexDirection: "row", gap: 8 },
+  pill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, backgroundColor: "#F1ECE2" },
+  pillActive: { backgroundColor: "#111827" },
+  pillText: { color: "#4B5563", fontWeight: "800", textTransform: "capitalize" },
+  pillTextActive: { color: "#FFFFFF" },
+  category: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: "#DED6CA" },
+  categoryActive: { borderColor: "#188A5B", backgroundColor: "#E6F4EC" },
+  categoryText: { color: "#4B5563", fontWeight: "800" },
+  categoryTextActive: { color: "#166534" },
+  section: { gap: 8 },
+  title: { color: "#111827", fontWeight: "900", fontSize: 18 },
+  cell: { minHeight: 64, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#EEE7DC", flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  cellTitle: { color: "#111827", fontSize: 15, fontWeight: "800" },
+  meta: { color: "#6B7280", fontSize: 12, marginTop: 3 },
+  actions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  action: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, backgroundColor: "#EDE7DA" },
+  actionText: { fontWeight: "800", color: "#111827" },
+  inlineEditor: { gap: 8, padding: 12, borderRadius: 8, backgroundColor: "#E6F4EC" },
+  editorTitle: { color: "#111827", fontWeight: "900" },
+  editorRow: { flexDirection: "row", gap: 8 },
+  gramsInput: { width: 92, minHeight: 42, borderRadius: 8, borderWidth: 1, borderColor: "#A7D8BD", paddingHorizontal: 10 },
+  confirm: { minHeight: 42, paddingHorizontal: 16, borderRadius: 8, backgroundColor: "#188A5B", alignItems: "center", justifyContent: "center" },
+  confirmText: { color: "#FFFFFF", fontWeight: "900" },
+  cancel: { minHeight: 42, paddingHorizontal: 12, borderRadius: 8, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  cancelText: { color: "#111827", fontWeight: "800" },
+  empty: { color: "#6B7280", paddingVertical: 12 }
 });
