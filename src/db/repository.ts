@@ -9,10 +9,20 @@ import { schemaSql } from "./schema";
 type Db = SQLite.SQLiteDatabase;
 
 let databasePromise: Promise<Db> | null = null;
+let initializedDatabasePromise: Promise<Db> | null = null;
+
+const openDatabase = async () => {
+  databasePromise ??= SQLite.openDatabaseAsync("macrotrack.db");
+  return databasePromise;
+};
 
 export const getDatabase = async () => {
-  databasePromise ??= SQLite.openDatabaseAsync("macrotrack.db");
-  const db = await databasePromise;
+  initializedDatabasePromise ??= initializeDatabase();
+  return initializedDatabasePromise;
+};
+
+const initializeDatabase = async () => {
+  const db = await openDatabase();
   await db.execAsync(schemaSql);
   await seedIfNeeded(db);
   return db;
@@ -88,6 +98,33 @@ const seedIfNeeded = async (db: Db) => {
       await db.runAsync("INSERT INTO reminder (label, time_of_day, enabled) VALUES (?, ?, ?)", "Log lunch", "12:00", 0);
     });
   }
+  const profile = await db.getFirstAsync<{ id: number }>("SELECT id FROM profile WHERE id = 1");
+  if (!profile) {
+    const defaults = defaultProfile();
+    await db.runAsync(
+      `INSERT INTO profile
+      (id, name, sex, birth_date, height_cm, activity_level, goal_type, desired_weight_kg,
+       desired_bicep_cm, desired_chest_cm, desired_waist_cm, desired_leg_both_cm, desired_single_leg_cm,
+       calorie_adjustment_pct, protein_g_per_kg, fat_g_per_kg)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      defaults.id,
+      defaults.name,
+      defaults.sex,
+      defaults.birth_date,
+      defaults.height_cm,
+      defaults.activity_level,
+      defaults.goal_type,
+      defaults.desired_weight_kg,
+      defaults.desired_bicep_cm,
+      defaults.desired_chest_cm,
+      defaults.desired_waist_cm,
+      defaults.desired_leg_both_cm,
+      defaults.desired_single_leg_cm,
+      defaults.calorie_adjustment_pct,
+      defaults.protein_g_per_kg,
+      defaults.fat_g_per_kg
+    );
+  }
 };
 
 export const searchFoods = async (query: string, filter?: keyof Food) => {
@@ -111,6 +148,28 @@ export const searchFoods = async (query: string, filter?: keyof Food) => {
 export const findFoodByBarcode = async (barcode: string) => {
   const db = await getDatabase();
   return db.getFirstAsync<Food>("SELECT * FROM food WHERE barcode = ? LIMIT 1", barcode);
+};
+
+export const createCustomFood = async (
+  food: Pick<Food, "name" | "kcal" | "protein_g" | "fat_g" | "carbs_g"> & {
+    barcode?: string | null;
+    aliases?: string | null;
+  }
+) => {
+  const db = await getDatabase();
+  const result = await db.runAsync(
+    `INSERT INTO food
+    (kind, is_seed, category, name, aliases, barcode, kcal, protein_g, fat_g, carbs_g)
+    VALUES ('PRODUCT', 0, 'PRODUCT', ?, ?, ?, ?, ?, ?, ?)`,
+    food.name,
+    food.aliases ?? null,
+    food.barcode ?? null,
+    food.kcal,
+    food.protein_g,
+    food.fat_g,
+    food.carbs_g
+  );
+  return db.getFirstAsync<Food>("SELECT * FROM food WHERE id = ?", result.lastInsertRowId);
 };
 
 export const getProfile = async () => {

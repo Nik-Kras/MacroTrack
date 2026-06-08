@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Platform, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Tab, TabBar } from "./src/components/TabBar";
 import { latestWeight, summarizeLog } from "./src/domain/analytics";
+import { toLocalDateKey } from "./src/domain/dates";
 import { calculateTargets, defaultProfile } from "./src/domain/targets";
 import type { BodyRecord, LogEntry, MacroTotals, Profile } from "./src/domain/types";
 import { getBodyRecords, getLogEntries, getProfile } from "./src/db/repository";
@@ -16,10 +17,11 @@ export default function App() {
   const [profile, setProfile] = useState<Profile>(defaultProfile());
   const [bodyRecords, setBodyRecords] = useState<BodyRecord[]>([]);
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
+  const [dateKey, setDateKey] = useState(toLocalDateKey());
   const [ready, setReady] = useState(false);
 
-  const refresh = async () => {
-    const [savedProfile, records, entries] = await Promise.all([getProfile(), getBodyRecords(), getLogEntries()]);
+  const refresh = async (nextDateKey = dateKey) => {
+    const [savedProfile, records, entries] = await Promise.all([getProfile(), getBodyRecords(), getLogEntries(nextDateKey)]);
     if (savedProfile) setProfile(savedProfile);
     setBodyRecords(records);
     setLogEntries(entries);
@@ -28,7 +30,7 @@ export default function App() {
 
   useEffect(() => {
     refresh().catch(console.error);
-  }, []);
+  }, [dateKey]);
 
   const currentWeight = latestWeight(bodyRecords);
   const targets = useMemo(() => calculateTargets(profile, currentWeight), [profile, currentWeight]);
@@ -49,11 +51,20 @@ export default function App() {
     if (tab === "profile") {
       return <ProfileScreen profile={profile} targets={targets} averageDeficit={averageDeficit} onChanged={refresh} />;
     }
-    return <NutritionScreen totals={totals} targets={targets} onChanged={refresh} onStats={() => setShowStats(true)} />;
+    return (
+      <NutritionScreen
+        dateKey={dateKey}
+        totals={totals}
+        targets={targets}
+        onDateChange={setDateKey}
+        onChanged={() => refresh(dateKey)}
+        onStats={() => setShowStats(true)}
+      />
+    );
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <View style={styles.safe}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.app}>{render()}</View>
       <TabBar
@@ -63,12 +74,12 @@ export default function App() {
           setTab(next);
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#FFFCF7" },
+  safe: { flex: 1, backgroundColor: "#FFFCF7", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0 },
   app: { flex: 1 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
   loadingTitle: { fontSize: 32, color: "#111827", fontWeight: "900", letterSpacing: 0 },
