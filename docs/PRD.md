@@ -8,6 +8,8 @@
 
 MacroTrack is a cross-platform (iOS + Android) mobile app for tracking **daily nutrition (macros)** and **body composition** over time. It is fully **local-first** — all data lives on the device, no account or internet connection is required. The app pairs precise macro logging with body-measurement tracking and goal progress, wrapped in a fast, low-friction UI.
 
+> **Positioning.** MacroTrack is **MyFitnessPal's core — minus the paywall, the account, and the ads.** Local-first and private, with a **photo-first dish gallery** and **curated, WHO-based food guidance** MyFitnessPal doesn't offer. Features MyFitnessPal locks behind Premium (gram-level macro goals, custom targets, barcode scanning, data export) are **free** here. Where MacroTrack deliberately diverges from MFP (no exercise/net-calorie model, no cloud/social), those choices are documented in *Out of scope → Deliberate divergences from MFP*.
+
 ---
 
 ## Main functionality
@@ -17,10 +19,15 @@ MacroTrack is a cross-platform (iOS + Android) mobile app for tracking **daily n
 - **Dishes (own page/tab)** — a **visual gallery of the user's custom dishes**. Each dish records the grams of every ingredient and a **photo of the finished dish**, and shows its macros (kcal/protein/carbs/fat) **per person and total**. Browse the gallery when unsure what to eat; tap a dish, adjust the grams actually used, hit **Use**, and the whole dish is added to today's log.
 - **Local photos** — dishes carry a photo, and when food is logged the photo is attached to the log entry too. All images are **stored locally on the device and never shared**.
 - **Curated food categories** — the database is browsable by helpful categories to guide what to eat: good sources of protein / carbs / fat (per WHO guidance), plus low-calorie and high-calorie options. Lets a user pick the right foods for their situation (e.g. "high protein, low calorie" while cutting; "high calorie + protein" while bulking).
+- **Barcode scanning** — scan a packaged product's barcode to resolve it against the **local** food database and jump straight into logging. Works fully offline; an unknown code routes into create-a-custom-food prefilled with that barcode. (Free here; this is a MyFitnessPal *Premium* feature.)
+- **Serving units / quantity** — log a food by a household unit (e.g. "1 cup", "1 medium egg", "2 slices") and a quantity, not only raw grams. Each food can expose multiple serving units; grams remain the canonical computed amount.
+- **Fast logging** — **Recent** and **Frequent** food lists for one-tap re-logging, **copy previous day** to duplicate yesterday's log, and **saved meals** (lightweight named groups of foods logged together in one step — distinct from photo Dishes).
 - **Daily target bars** — the Nutrition page shows progress bars for kcal, protein, carbs, and fat (current vs. allowed), derived from the user's current weight and goal. Tapping a bar opens the statistics page.
 - **Statistics & charts** — deficit/surplus and macro trends across day / week / month time spans.
 - **Goals & progress** — onboarding captures current and desired weight/measurements; profile shows a progress bar per metric.
-- **Export** — generate shareable text or CSV of a day (with per-food detail) or a week/month summary (macro totals only, no food detail).
+- **Weight projection / target date** — from the current pace (intake vs. target) and goal rate, project when the desired weight will be reached.
+- **Engagement** — logging **streaks** and milestone **badges**, **local reminders** to log meals (no server, fully offline), a **weekly digest** summarizing the last 7 days, and optional **body progress photos** stored on-device.
+- **Export** — generate shareable text or CSV of a day (with per-food detail) or a week/month summary (macro totals only, no food detail). (Free here; data export is a MyFitnessPal *Premium* feature.)
 
 ---
 
@@ -32,12 +39,16 @@ Fitness-minded individuals (cutting, bulking, body recomposition) who want preci
 
 ## Core data model (local)
 
-- **General food database** — pre-seeded from a maintained Excel/spreadsheet source (name + macros per 100 g). Read-only baseline shipped with the app.
+- **General food database** — pre-seeded from a maintained Excel/spreadsheet source (name + macros per 100 g, optional barcode, optional serving units). Read-only baseline shipped with the app.
 - **User food/dish database** — custom dishes and foods the user creates; stored **only on the local device**, never shared. Surfaced in the user's own search alongside the general database. A **dish** = a named set of `{ingredient, grams}` entries + a serving/person count + a local photo; macros are computed per person and in total.
-- **Local images** — photos for dishes and log entries, stored on-device (file system, paths referenced from the DB). Never uploaded or shared.
-- **Body records** — timestamped weight + measurements.
-- **Nutrition log** — per-day list of logged foods/dishes with grams, computed macros, and an optional attached photo.
-- **User profile & goals** — name, current stats, desired stats, activity level, goal type.
+- **Serving units** — per-food household units (label + grams-per-serving, e.g. "1 cup = 240 g") so a food can be logged by unit + quantity, not only grams. Grams remain the canonical amount stored on a log entry.
+- **Saved meals** — lightweight named groups of foods/dishes the user logs together in one step. Distinct from Dishes: no photo, no per-person math — just a quick bundle.
+- **Local images** — photos for dishes, log entries, and **body progress photos**, stored on-device (file system, paths referenced from the DB). Never uploaded or shared.
+- **Body records** — timestamped weight + measurements, with an optional local progress photo.
+- **Nutrition log** — per-day list of logged foods/dishes with grams (and the serving unit + quantity, when used), computed macros, and an optional attached photo. **Recent** and **Frequent** foods are *derived* from this log (no separate table).
+- **Reminders** — user-defined local meal-log reminders (time of day + label), driving on-device scheduled notifications. No server, no network.
+- **Achievements** — unlocked milestone badges; the logging **streak** itself is *derived* from the distinct logged days.
+- **User profile & goals** — name, current stats, desired stats, activity level, goal type. The **weight projection / target date** is *derived* from current weight, desired weight, and the goal deficit rate (no stored field).
 
 > The Excel source is the human-editable source of truth for the general database. **Decision:** it is transformed into a prebuilt read-only SQLite asset **at build time** and bundled with the app (the `food` rows below are seeded from it with `is_seed = 1`). Curated-category flags travel from the spreadsheet columns into the `food` table verbatim.
 
@@ -66,6 +77,7 @@ CREATE TABLE food (
   name_ua       TEXT,
   aliases       TEXT,                          -- semicolon-separated (English), as in source
   aliases_ua    TEXT,                          -- semicolon-separated (Ukrainian)
+  barcode       TEXT,                          -- UPC/EAN; nullable. Seeded where source has it; user foods may store a scanned code. Lookup is offline-only.
   kcal          REAL    NOT NULL,              -- per 100 g, as shipped in source (see note)
   protein_g     REAL    NOT NULL,              -- per 100 g
   fat_g         REAL    NOT NULL,              -- per 100 g
@@ -84,6 +96,21 @@ CREATE TABLE food (
 );
 CREATE INDEX idx_food_kind ON food(kind);
 CREATE INDEX idx_food_name ON food(name);
+CREATE INDEX idx_food_barcode ON food(barcode);  -- fast offline barcode → food lookup (AC-BR)
+
+-- ============================================================
+-- 1b. Serving units: per-food household units (label + grams),
+--     so a food can be logged by unit + quantity, not only grams.
+--     Grams stays canonical; serving.grams converts unit → grams.
+-- ============================================================
+CREATE TABLE food_serving (
+  id          INTEGER PRIMARY KEY,
+  food_id     INTEGER NOT NULL REFERENCES food(id) ON DELETE CASCADE,
+  label       TEXT    NOT NULL,                -- e.g. '1 cup', '1 medium egg', '2 slices'
+  grams       REAL    NOT NULL CHECK (grams > 0),  -- grams represented by ONE of this unit
+  is_default  INTEGER NOT NULL DEFAULT 0       -- 1 = preselected unit in the logging UI
+);
+CREATE INDEX idx_food_serving_food ON food_serving(food_id);
 
 -- Full-text index over names + aliases for smart/fuzzy search (AC-FD-2).
 CREATE VIRTUAL TABLE food_fts USING fts5(
@@ -139,7 +166,9 @@ CREATE TABLE log_entry (
   source_type    TEXT    NOT NULL CHECK (source_type IN ('FOOD','DISH')),
   food_id        INTEGER REFERENCES food(id),         -- when source_type = 'FOOD'
   custom_dish_id INTEGER REFERENCES custom_dish(id),  -- when source_type = 'DISH'
-  grams          REAL,                          -- grams consumed (FOOD entries)
+  grams          REAL,                          -- grams consumed (FOOD entries) — ALWAYS the resolved canonical amount
+  serving_id     INTEGER REFERENCES food_serving(id), -- unit chosen for FOOD entries (NULL = logged in raw grams)
+  quantity       REAL,                          -- number of servings of serving_id; grams = quantity × serving.grams
   servings_used  REAL,                          -- portion consumed in persons (DISH entries)
   kcal           REAL    NOT NULL,              -- snapshot of consumed macros...
   protein_g      REAL    NOT NULL,              -- ...computed at log time
@@ -167,13 +196,67 @@ CREATE TABLE body_record (
   waist_cm      REAL,
   leg_both_cm   REAL,    -- legs (both)  } measurement set per PRD;
   single_leg_cm REAL,    -- single leg   } confirm exact sites
+  photo_uri     TEXT,    -- optional progress photo (local file path); never uploaded
   CHECK (weight_kg IS NOT NULL OR bicep_cm IS NOT NULL OR chest_cm IS NOT NULL
-      OR waist_cm IS NOT NULL OR leg_both_cm IS NOT NULL OR single_leg_cm IS NOT NULL)
+      OR waist_cm IS NOT NULL OR leg_both_cm IS NOT NULL OR single_leg_cm IS NOT NULL
+      OR photo_uri IS NOT NULL)
 );
 CREATE INDEX idx_body_recorded_at ON body_record(recorded_at);
 
 -- ============================================================
--- 5. Profile & goals: a single row (id = 1). Current weight is
+-- 5. Saved meals: lightweight named groups logged in one step.
+--    NOT custom dishes (no photo, no per-person math) — just a
+--    quick bundle. Logging one appends each item to log_entry.
+-- ============================================================
+CREATE TABLE saved_meal (
+  id          INTEGER PRIMARY KEY,
+  name        TEXT    NOT NULL,
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE saved_meal_item (
+  id            INTEGER PRIMARY KEY,
+  saved_meal_id INTEGER NOT NULL REFERENCES saved_meal(id) ON DELETE CASCADE,
+  source_type   TEXT    NOT NULL CHECK (source_type IN ('FOOD','DISH')),
+  food_id       INTEGER REFERENCES food(id),         -- when source_type = 'FOOD'
+  custom_dish_id INTEGER REFERENCES custom_dish(id), -- when source_type = 'DISH'
+  grams         REAL,                          -- resolved grams (FOOD items)
+  serving_id    INTEGER REFERENCES food_serving(id), -- unit chosen (NULL = raw grams)
+  quantity      REAL,                          -- servings of serving_id (FOOD items)
+  servings_used REAL,                          -- portion in persons (DISH items)
+  position      INTEGER NOT NULL DEFAULT 0,
+  CHECK (
+    (source_type = 'FOOD' AND food_id IS NOT NULL AND custom_dish_id IS NULL) OR
+    (source_type = 'DISH' AND custom_dish_id IS NOT NULL AND food_id IS NULL)
+  )
+);
+CREATE INDEX idx_smi_meal ON saved_meal_item(saved_meal_id);
+
+-- ============================================================
+-- 6. Reminders: user-defined local meal-log notifications.
+--    Drives on-device scheduled notifications (expo-notifications);
+--    no server, no network.
+-- ============================================================
+CREATE TABLE reminder (
+  id           INTEGER PRIMARY KEY,
+  label        TEXT    NOT NULL,               -- e.g. 'Log breakfast'
+  time_of_day  TEXT    NOT NULL,               -- 'HH:MM' local time
+  enabled      INTEGER NOT NULL DEFAULT 1
+);
+
+-- ============================================================
+-- 7. Achievements: unlocked milestone badges. The logging STREAK
+--    is derived from distinct log_entry.log_date values, not stored;
+--    only unlocked badges are persisted here.
+-- ============================================================
+CREATE TABLE achievement (
+  id           INTEGER PRIMARY KEY,
+  code         TEXT    NOT NULL UNIQUE,        -- e.g. 'STREAK_7', 'STREAK_30', 'FIRST_LOG'
+  unlocked_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ============================================================
+-- 8. Profile & goals: a single row (id = 1). Current weight is
 --    read from the latest body_record; coefficients are editable
 --    (future in-app config) and default to the pinned values.
 -- ============================================================
@@ -206,6 +289,11 @@ CREATE TABLE profile (
 - **kcal storage vs. computed totals**: `food.kcal` is stored as shipped in the spreadsheet (it can differ slightly from 4·P + 4·C + 9·F). Per *Goals & target formulas*, the app's **computed intake/target totals use the 4/4/9 rule on the macro grams** — `food.kcal` is for per-100 g display only. (Minor source/compute divergence is expected; flagged, not silently reconciled.)
 - **Custom dishes are not in `food`**, so they can't be nested as ingredients of other custom dishes (no recursion). Ingredients reference `food` rows (products, or — edge case — default dishes).
 - **Bilingual**: English + Ukrainian names and semicolon-split aliases are stored; FTS indexes both languages.
+- **Serving units**: a `log_entry` always stores resolved `grams` (single source of truth for macro math). `serving_id` + `quantity` are kept only to *display* and re-edit the entry as "0.5 cup" rather than "120 g". A food with no `food_serving` rows is logged in raw grams (`serving_id` NULL). Snapshotted macros are computed from `grams` exactly as today.
+- **Barcode**: lookup is `SELECT … FROM food WHERE barcode = ?` against the local DB only — no network call. A miss opens create-custom-food with the scanned code prefilled (AC-BR).
+- **Saved meals vs. Dishes**: a `saved_meal` is a quick bundle (no photo, no servings/person); logging it expands its `saved_meal_item` rows into individual `log_entry` rows (macros snapshotted per item at log time, same as any log). A `custom_dish` is the richer photo-forward, per-person construct.
+- **Recent / Frequent foods** need no table — *Recent* = latest distinct `food_id`/`custom_dish_id` by `created_at`; *Frequent* = same grouped by count over a window.
+- **Progress photos** reuse the local-image pattern: `body_record.photo_uri` is a file path; the image never leaves the device.
 
 ---
 
@@ -260,6 +348,10 @@ Energy per gram: protein 4 kcal, carbs 4 kcal, fat 9 kcal.
 
 Derive **deficit or surplus** over day / week / month / all-time by comparing logged intake against these targets, alongside protein/carb/fat intake trends.
 
+### Weight projection / target date
+
+From the recent average daily deficit/surplus (intake − target) and the goal's intended rate of weight change, project a **target date** to reach `desired_weight_kg`. This is MacroTrack's analogue of MyFitnessPal's "Complete Diary → projected weight." Rule of thumb: ~7,700 kcal ≈ 1 kg of body mass, so `weeks_to_goal ≈ (current_kg − desired_kg) · 7700 / (avg_daily_deficit · 7)`. It is **motivational/illustrative only** (assumes the recent pace holds); show it on Profile and/or Statistics, and suppress it when there isn't enough logged history to estimate a stable pace.
+
 ---
 
 ## UI/UX choices
@@ -278,6 +370,18 @@ Derive **deficit or surplus** over day / week / month / all-time by comparing lo
 - **Charts** — measurement and macro trends over the same time spans.
 - Speed and simplicity prioritized over feature density; offline and instant by design.
 
+### MFP UI/UX inspirations
+
+Patterns borrowed from MyFitnessPal, layered on the **Bring** north star (clean cells, minimal taps). These keep MacroTrack's three-tab structure and photo-first Dishes — they are inspirations, not a clone of MFP's navigation.
+
+- **Calories-remaining framing** — alongside the current-vs-allowed bars, show `Target − Eaten = Remaining` as a prominent hero number / ring. MacroTrack uses a **static** target (no exercise add-back — see *Deliberate divergences*), so the equation has no exercise term.
+- **Macro visualization** — **laconic horizontal bars** for the P/C/F split (a compact stacked/grouped bar, not a pie — pies eat too much screen), complementing the four target bars, with a **Day / Week** toggle on macro trends.
+- **Diary edit mode** — multi-select on Today's log with bulk actions: delete, **copy to another day**, and **save selection as a meal**.
+- **Search surface** — tabs for **All / Recent / Frequent / My Foods**, plus a **barcode-scan** entry point in the search bar.
+- **Quick-add affordances** — long-press quick-edit of grams (already specified), one-tap re-log from Recent/Frequent, and **copy yesterday**.
+- **A "Today" dashboard** — a consolidated glance at calories remaining, macros, current **streak**, and goal progress (analogous to MFP's redesigned Today tab).
+- **Engagement surfacing** — streak counter and milestone badges shown unobtrusively; reminders configured in settings; the weekly digest presented as a simple "your week" summary.
+
 ---
 
 ## Tech stack
@@ -286,6 +390,8 @@ Derive **deficit or surplus** over day / week / month / all-time by comparing lo
 - **Local database:** SQLite (on-device).
 - **Charts:** a React Native charting library (TBD).
 - **Images:** camera/library capture (`expo-image-picker`) with files saved to local app storage (`expo-file-system`); DB stores file paths.
+- **Barcode:** `expo-camera` (with its barcode-scanning API; or `expo-barcode-scanner`). Scans resolve **offline** against `food.barcode`; a miss opens create-custom-food prefilled with the code. No external nutrition API.
+- **Notifications:** `expo-notifications` for **local** scheduled meal reminders only — no push server, preserving the no-network-at-runtime guarantee.
 - **Language:** TypeScript.
 - **State/storage:** local-only; no backend, no auth, no network calls required at runtime.
 
@@ -429,6 +535,9 @@ Rounding: display whole grams/kcal; round half up.
 - **AC-BC-2** — GIVEN multiple records over time · THEN each metric shows history, a chart, and
   trend dynamics over day / week / month / all-time.
 - **AC-BC-3** — GIVEN any input · THEN only metric units are accepted (kg / cm; no imperial).
+- **AC-BC-4** — GIVEN a body record · WHEN an optional progress photo is captured/picked · THEN
+  the image is saved to local app storage, only its path is stored in `body_record.photo_uri`,
+  and it is never uploaded or shared.
 
 ### Export — `AC-EX`
 
@@ -437,6 +546,54 @@ Rounding: display whole grams/kcal; round half up.
 - **AC-EX-2** — GIVEN a week or month · WHEN exported · THEN output contains macro totals only,
   with **no per-food detail**.
 
+### Barcode scanning — `AC-BR`
+
+- **AC-BR-1** — GIVEN a product whose barcode exists in the local `food` table · WHEN its
+  barcode is scanned · THEN the matching food is resolved and the logging flow opens for it.
+- **AC-BR-2** — GIVEN a scanned barcode with no match in the local DB · THEN the app offers to
+  create a custom food with that barcode prefilled (no network lookup is attempted).
+- **AC-BR-3** — GIVEN no internet connection · WHEN any barcode is scanned · THEN resolution
+  runs entirely against the local DB and succeeds/fails offline (no network request is made).
+
+### Serving units — `AC-SV`
+
+- **AC-SV-1** — GIVEN a food defining "1 cup = 240 g" · WHEN 0.5 cup is logged · THEN the entry
+  records `grams = 120`, `serving_id` = that unit, `quantity = 0.5`, and macros computed from
+  120 g; the daily totals increase accordingly.
+- **AC-SV-2** — GIVEN a food with no serving units defined · WHEN it is logged · THEN it is
+  logged in raw grams (`serving_id` NULL) exactly as before.
+- **AC-SV-3** — GIVEN an entry logged as 0.5 cup · WHEN it is re-opened for edit · THEN it
+  displays as "0.5 cup" (not "120 g"), and changing quantity rescales grams and macros.
+
+### Fast logging — `AC-QL`
+
+- **AC-QL-1 (Recent)** — GIVEN previously logged foods · WHEN the Recent list is opened · THEN
+  it shows the most recently logged distinct items, newest first, each re-loggable in one tap.
+- **AC-QL-2 (Frequent)** — GIVEN a logging history · WHEN the Frequent list is opened · THEN
+  items are ranked by how often they were logged over the window.
+- **AC-QL-3 (Copy previous day)** — GIVEN yesterday's log · WHEN "copy previous day" is used ·
+  THEN each of yesterday's entries is duplicated into today with the same grams/macros, and
+  today's totals update.
+- **AC-QL-4 (Saved meals)** — GIVEN a saved meal of {oats 80 g, milk 200 g} · WHEN it is
+  logged · THEN both items are appended to today as individual entries with per-item snapshotted
+  macros, and the daily bars update by their sum.
+- **AC-QL-5 (Save selection as meal)** — GIVEN selected items in Today's log · WHEN "save as
+  meal" is used · THEN a `saved_meal` with those items is created for future one-tap logging.
+
+### Engagement — `AC-EN`
+
+- **AC-EN-1 (Streak)** — GIVEN logs on consecutive days · THEN the streak count equals the run
+  of consecutive logged days; AND a day with no entries resets the streak.
+- **AC-EN-2 (Badge)** — GIVEN the streak reaches a milestone threshold (e.g. 7 days) · THEN the
+  corresponding badge unlocks once and is persisted in `achievement`.
+- **AC-EN-3 (Reminder)** — GIVEN an enabled reminder at 12:00 · THEN a local notification fires
+  at 12:00 with no network involved; AND disabling it cancels the scheduled notification.
+- **AC-EN-4 (Weekly digest)** — GIVEN seven days of data · WHEN the weekly digest is viewed ·
+  THEN it summarizes the last 7 days (e.g. avg calories vs. target, deficit/surplus, days logged).
+- **AC-EN-5 (Weight projection)** — GIVEN current 80 kg, desired 75 kg, and a sustained average
+  deficit · THEN a target date is projected from the recent pace; AND with insufficient history
+  the projection is suppressed rather than shown unreliably.
+
 ---
 
 ## Out of scope (v1)
@@ -444,20 +601,46 @@ Rounding: display whole grams/kcal; round half up.
 - User accounts, login, multi-device sync.
 - Cloud backup (nice-to-have, low priority — may revisit).
 - Any social/sharing features beyond text/CSV export.
-- Barcode scanning.
 - AI photo or natural-language food estimation.
 - In-app coaching/feedback or recommendations beyond goal-derived targets.
 - Monetization, ads, subscriptions.
 - Imperial units (kg/cm only).
 
+### Deliberate divergences from MyFitnessPal
+
+These are core MFP features intentionally **not** copied — design decisions, not oversights:
+
+- **Exercise logging & the net-calorie budget** (`Goal − Food + Exercise = Remaining`).
+  MacroTrack uses a **static daily target** instead. The TDEE already includes an activity
+  multiplier, so adding exercise calories back tends to **double-count** activity, and
+  calorie-burn estimates are unreliable — eating them back erases the deficit. A fixed target
+  is simpler and, for steady-state cutting/bulking, arguably more accurate. *(Logging workouts
+  for history-only, with no add-back, is noted as a possible future option but is not in v1.)*
+- **Health / wearable sync** (Apple Health, Google Fit / Health Connect, step-based calorie
+  adjustment). Conflicts with the local-first promise; on-device-only Health APIs may be
+  revisited later, cloud sync never.
+- **Recipe import from a URL, community feed, friends, and challenges.** All require network;
+  excluded to keep the app fully offline. (Dishes already cover local recipe building.)
+
 ---
+
+## Fast-follow / v1.1 (decided, deferred — not v1)
+
+Agreed MFP-parity features that are deliberately held back from v1 to keep the first build focused:
+
+- **Meal sections** — group the diary into Breakfast / Lunch / Dinner / Snacks with per-meal
+  subtotals. Implementation note: add a `meal_type` column to `log_entry` and group/​subtotal
+  the Today's-log view; `copy previous day` would become per-meal copy. (Also enables MFP's
+  "Macros by Meal".)
+- **Water logging** — daily water intake tracking.
+- **Micronutrients** — fiber, sugar, sodium (and more) surfaced where the source data exists.
 
 ## Nice-to-have / future
 
 - Optional cloud backup & restore.
 - Configurable formula coefficients in-app.
-- Additional micronutrients (fiber, sugar, sodium).
 - Dark mode / theming.
+- Log workouts for history-only (no calorie add-back) — see *Deliberate divergences*.
 
 ---
 
@@ -468,3 +651,6 @@ Rounding: display whole grams/kcal; round half up.
 3. Charting library choice.
 4. ~~Whether any friends use iOS (determines if the $99/yr Apple account is needed).~~ **Resolved:** yes — some friends use iOS, so the **$99/yr Apple Developer account is needed** and the v1 iOS path is **TestFlight** (invite-link distribution; see *Deployment & distribution*).
 5. ~~How curated-category membership is determined — a tag column in the source Excel, computed automatically from macro thresholds, or a mix.~~ **Resolved:** explicit per-metric flag columns in the source (`low_/high_` for kcal/fat/protein/carbs; each metric classified low **xor** high), copied into the `food` table. The WHO-based thresholds used to *populate* those flags in the spreadsheet still need documenting.
+6. **Source spreadsheet must carry barcode + serving-unit data.** The source at `data/samples/Macros App - Product Nutrition Database.xlsx` needs a **barcode** column on products and a way to express **serving units** (a new `Servings` sheet, or repeated `unit_label`/`unit_grams` columns). Define the exact shape and how it transforms into `food.barcode` and `food_serving` at build time.
+7. **Badge / achievement catalog** — which milestones exist and their thresholds (e.g. first log, 7/30/90-day streaks, goal reached) and the `achievement.code` values.
+8. **Reminder defaults** — which reminders ship enabled by default and at what times (e.g. breakfast/lunch/dinner), if any.

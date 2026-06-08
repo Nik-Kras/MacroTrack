@@ -1,6 +1,6 @@
 # MacroTrack
 
-Cross-platform Expo app for local-first macro, dish, and body composition tracking.
+Cross-platform Expo app for local-first macro, dish, and body composition tracking — a private, offline take on MyFitnessPal's core. Logs foods by grams or serving units, scans barcodes against a bundled food database, speeds up logging with recent/frequent foods and saved meals, derives daily macro targets from your goals, and keeps you on track with streaks, local reminders, and a weekly digest. No account, no ads, no cloud.
 
 ## Run
 
