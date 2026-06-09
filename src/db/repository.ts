@@ -2,7 +2,7 @@ import * as SQLite from "expo-sqlite";
 import { seedFoods } from "../data/seedFoods";
 import { toLocalDateKey, addDays } from "../domain/dates";
 import { macrosForFoodGrams } from "../domain/macros";
-import { defaultProfile } from "../domain/targets";
+import { defaultProfile, goalDefaults } from "../domain/targets";
 import type { BodyRecord, CustomDish, Food, LogEntry, MacroTotals, Profile, SavedMeal } from "../domain/types";
 import { schemaSql } from "./schema";
 
@@ -27,8 +27,16 @@ export const getDatabase = async () => {
 const initializeDatabase = async () => {
   const db = await openDatabase();
   await db.execAsync(schemaSql);
+  await ensureMigrations(db);
   await seedIfNeeded(db);
   return db;
+};
+
+const ensureMigrations = async (db: Db) => {
+  const profileColumns = await db.getAllAsync<{ name: string }>("PRAGMA table_info(profile)");
+  if (!profileColumns.some((column) => column.name === "onboarded")) {
+    await db.execAsync("ALTER TABLE profile ADD COLUMN onboarded INTEGER NOT NULL DEFAULT 0");
+  }
 };
 
 const seedIfNeeded = async (db: Db) => {
@@ -76,12 +84,13 @@ const seedIfNeeded = async (db: Db) => {
       const profile = defaultProfile();
       await db.runAsync(
         `INSERT OR IGNORE INTO profile
-        (id, name, sex, birth_date, height_cm, activity_level, goal_type, desired_weight_kg,
+        (id, name, onboarded, sex, birth_date, height_cm, activity_level, goal_type, desired_weight_kg,
          desired_bicep_cm, desired_chest_cm, desired_waist_cm, desired_leg_both_cm, desired_single_leg_cm,
          calorie_adjustment_pct, protein_g_per_kg, fat_g_per_kg)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         profile.id,
         profile.name,
+        profile.onboarded,
         profile.sex,
         profile.birth_date,
         profile.height_cm,
@@ -97,7 +106,6 @@ const seedIfNeeded = async (db: Db) => {
         profile.protein_g_per_kg,
         profile.fat_g_per_kg
       );
-      await db.runAsync("INSERT INTO body_record (weight_kg, waist_cm) VALUES (?, ?)", 80, 90);
       await db.runAsync("INSERT INTO reminder (label, time_of_day, enabled) VALUES (?, ?, ?)", "Log lunch", "12:00", 0);
     });
   }
@@ -106,12 +114,13 @@ const seedIfNeeded = async (db: Db) => {
     const defaults = defaultProfile();
     await db.runAsync(
       `INSERT INTO profile
-      (id, name, sex, birth_date, height_cm, activity_level, goal_type, desired_weight_kg,
+      (id, name, onboarded, sex, birth_date, height_cm, activity_level, goal_type, desired_weight_kg,
        desired_bicep_cm, desired_chest_cm, desired_waist_cm, desired_leg_both_cm, desired_single_leg_cm,
        calorie_adjustment_pct, protein_g_per_kg, fat_g_per_kg)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       defaults.id,
       defaults.name,
+      defaults.onboarded,
       defaults.sex,
       defaults.birth_date,
       defaults.height_cm,
@@ -188,6 +197,78 @@ export const createCustomFood = async (
 export const getProfile = async () => {
   const db = await getDatabase();
   return db.getFirstAsync<Profile>("SELECT * FROM profile WHERE id = 1");
+};
+
+export const saveOnboardingProfile = async (
+  profile: Pick<
+    Profile,
+    | "name"
+    | "sex"
+    | "birth_date"
+    | "height_cm"
+    | "activity_level"
+    | "goal_type"
+    | "desired_weight_kg"
+    | "desired_bicep_cm"
+    | "desired_chest_cm"
+    | "desired_waist_cm"
+    | "desired_leg_both_cm"
+    | "desired_single_leg_cm"
+  >,
+  body: Pick<BodyRecord, "weight_kg" | "bicep_cm" | "chest_cm" | "waist_cm" | "leg_both_cm" | "single_leg_cm">
+) => {
+  const db = await getDatabase();
+  const goal = goalDefaults[profile.goal_type];
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `UPDATE profile
+       SET name = ?,
+           onboarded = 1,
+           sex = ?,
+           birth_date = ?,
+           height_cm = ?,
+           activity_level = ?,
+           goal_type = ?,
+           desired_weight_kg = ?,
+           desired_bicep_cm = ?,
+           desired_chest_cm = ?,
+           desired_waist_cm = ?,
+           desired_leg_both_cm = ?,
+           desired_single_leg_cm = ?,
+           calorie_adjustment_pct = ?,
+           protein_g_per_kg = ?,
+           fat_g_per_kg = ?,
+           updated_at = datetime('now')
+       WHERE id = 1`,
+      profile.name?.trim() || "MacroTrack",
+      profile.sex,
+      profile.birth_date,
+      profile.height_cm,
+      profile.activity_level,
+      profile.goal_type,
+      profile.desired_weight_kg,
+      profile.desired_bicep_cm,
+      profile.desired_chest_cm,
+      profile.desired_waist_cm,
+      profile.desired_leg_both_cm,
+      profile.desired_single_leg_cm,
+      goal.calorieAdjustmentPct,
+      goal.proteinGPerKg,
+      goal.fatGPerKg
+    );
+    await db.runAsync("DELETE FROM body_record");
+    await db.runAsync(
+      `INSERT INTO body_record
+       (weight_kg, bicep_cm, chest_cm, waist_cm, leg_both_cm, single_leg_cm)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      body.weight_kg,
+      body.bicep_cm,
+      body.chest_cm,
+      body.waist_cm,
+      body.leg_both_cm,
+      body.single_leg_cm
+    );
+  });
 };
 
 export const getBodyRecords = async () => {

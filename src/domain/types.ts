@@ -51,6 +51,7 @@ export type MacroTotals = {
 export type Profile = {
   id: 1;
   name: string | null;
+  onboarded: number;
   sex: Sex;
   birth_date: string;
   height_cm: number;

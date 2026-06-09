@@ -8,6 +8,7 @@ import type { BodyRecord, LogEntry, MacroTotals, Profile } from "./src/domain/ty
 import { getBodyRecords, getLogEntries, getProfile } from "./src/db/repository";
 import { DishesScreen } from "./src/screens/DishesScreen";
 import { NutritionScreen } from "./src/screens/NutritionScreen";
+import { OnboardingScreen } from "./src/screens/OnboardingScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { StatsScreen } from "./src/screens/StatsScreen";
 
@@ -46,6 +47,7 @@ export default function App() {
         </View>
       );
     }
+    if (profile.onboarded !== 1) return <OnboardingScreen onComplete={() => refresh(dateKey)} />;
     if (showStats) return <StatsScreen targets={targets} />;
     if (tab === "dishes") return <DishesScreen onChanged={refresh} />;
     if (tab === "profile") {
@@ -67,13 +69,15 @@ export default function App() {
     <View style={styles.safe}>
       <StatusBar barStyle="light-content" />
       <View style={styles.app}>{render()}</View>
-      <TabBar
-        active={tab}
-        onChange={(next) => {
-          setShowStats(false);
-          setTab(next);
-        }}
-      />
+      {ready && profile.onboarded === 1 ? (
+        <TabBar
+          active={tab}
+          onChange={(next) => {
+            setShowStats(false);
+            setTab(next);
+          }}
+        />
+      ) : null}
     </View>
   );
 }

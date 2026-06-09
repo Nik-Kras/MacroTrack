@@ -66,6 +66,7 @@ export const calculateTargets = (
 export const defaultProfile = (): Profile => ({
   id: 1,
   name: "MacroTrack",
+  onboarded: 0,
   sex: "male",
   birth_date: "1996-06-08",
   height_cm: 180,

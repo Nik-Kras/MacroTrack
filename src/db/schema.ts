@@ -168,6 +168,7 @@ CREATE TABLE IF NOT EXISTS achievement (
 CREATE TABLE IF NOT EXISTS profile (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   name TEXT,
+  onboarded INTEGER NOT NULL DEFAULT 0,
   sex TEXT CHECK (sex IN ('male','female')),
   birth_date TEXT,
   height_cm REAL,

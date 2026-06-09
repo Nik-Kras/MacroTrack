@@ -18,6 +18,7 @@ type Props = {
 
 export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: Props) => {
   const [records, setRecords] = useState<BodyRecord[]>([]);
+  const [showRecordForm, setShowRecordForm] = useState(false);
   const [weight, setWeight] = useState("");
   const [waist, setWaist] = useState("");
   const [bicep, setBicep] = useState("");
@@ -33,8 +34,13 @@ export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: P
   }, []);
 
   const currentWeight = latestWeight(records);
+  const latestRecord = [...records].reverse().find((record) =>
+    [record.weight_kg, record.waist_cm, record.bicep_cm, record.chest_cm, record.leg_both_cm, record.single_leg_cm].some((value) => value !== null)
+  );
   const startWeight = records.find((record) => record.weight_kg !== null)?.weight_kg ?? currentWeight;
   const projection = projectTargetDate(currentWeight, profile.desired_weight_kg, averageDeficit);
+  const metricText = (current: number | null | undefined, desired: number | null | undefined, unit: string) =>
+    `${current ? roundHalfUp(current) : "--"}${unit} -> ${desired ? roundHalfUp(desired) : "--"}${unit}`;
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
@@ -63,6 +69,7 @@ export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: P
     setLegs("");
     setSingleLeg("");
     setPhotoUri(undefined);
+    setShowRecordForm(false);
     await refresh();
     onChanged();
   };
@@ -92,22 +99,80 @@ export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: P
         </Text>
       </View>
 
-      <View style={styles.form}>
-        <Text style={styles.panelTitle}>Add body record</Text>
-        <View style={styles.grid}>
-          <TextInput value={weight} onChangeText={setWeight} placeholder="Weight kg" keyboardType="numeric" style={styles.input} />
-          <TextInput value={waist} onChangeText={setWaist} placeholder="Waist cm" keyboardType="numeric" style={styles.input} />
-          <TextInput value={bicep} onChangeText={setBicep} placeholder="Bicep cm" keyboardType="numeric" style={styles.input} />
-          <TextInput value={chest} onChangeText={setChest} placeholder="Chest cm" keyboardType="numeric" style={styles.input} />
-          <TextInput value={legs} onChangeText={setLegs} placeholder="Both legs cm" keyboardType="numeric" style={styles.input} />
-          <TextInput value={singleLeg} onChangeText={setSingleLeg} placeholder="Single leg cm" keyboardType="numeric" style={styles.input} />
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Profile data</Text>
+        <View style={styles.dataGrid}>
+          <View style={styles.dataCell}>
+            <Text style={styles.dataLabel}>Sex</Text>
+            <Text style={styles.dataValue}>{profile.sex}</Text>
+          </View>
+          <View style={styles.dataCell}>
+            <Text style={styles.dataLabel}>Birth date</Text>
+            <Text style={styles.dataValue}>{profile.birth_date}</Text>
+          </View>
+          <View style={styles.dataCell}>
+            <Text style={styles.dataLabel}>Height</Text>
+            <Text style={styles.dataValue}>{roundHalfUp(profile.height_cm)} cm</Text>
+          </View>
+          <View style={styles.dataCell}>
+            <Text style={styles.dataLabel}>Activity</Text>
+            <Text style={styles.dataValue}>{profile.activity_level.replace("_", " ")}</Text>
+          </View>
         </View>
-        <Pressable style={styles.secondary} onPress={pickPhoto}>
-          <Text style={styles.secondaryText}>{photoUri ? "Progress photo attached" : "Attach local progress photo"}</Text>
+      </View>
+
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>Body parameters</Text>
+        <View style={styles.dataGrid}>
+          <View style={styles.dataCell}>
+            <Text style={styles.dataLabel}>Weight</Text>
+            <Text style={styles.dataValue}>{metricText(latestRecord?.weight_kg, profile.desired_weight_kg, " kg")}</Text>
+          </View>
+          <View style={styles.dataCell}>
+            <Text style={styles.dataLabel}>Waist</Text>
+            <Text style={styles.dataValue}>{metricText(latestRecord?.waist_cm, profile.desired_waist_cm, " cm")}</Text>
+          </View>
+          <View style={styles.dataCell}>
+            <Text style={styles.dataLabel}>Bicep</Text>
+            <Text style={styles.dataValue}>{metricText(latestRecord?.bicep_cm, profile.desired_bicep_cm, " cm")}</Text>
+          </View>
+          <View style={styles.dataCell}>
+            <Text style={styles.dataLabel}>Chest</Text>
+            <Text style={styles.dataValue}>{metricText(latestRecord?.chest_cm, profile.desired_chest_cm, " cm")}</Text>
+          </View>
+          <View style={styles.dataCell}>
+            <Text style={styles.dataLabel}>Both legs</Text>
+            <Text style={styles.dataValue}>{metricText(latestRecord?.leg_both_cm, profile.desired_leg_both_cm, " cm")}</Text>
+          </View>
+          <View style={styles.dataCell}>
+            <Text style={styles.dataLabel}>Single leg</Text>
+            <Text style={styles.dataValue}>{metricText(latestRecord?.single_leg_cm, profile.desired_single_leg_cm, " cm")}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.form}>
+        <Pressable style={styles.secondary} onPress={() => setShowRecordForm((value) => !value)}>
+          <Text style={styles.secondaryText}>{showRecordForm ? "Hide body record form" : "Add body record"}</Text>
         </Pressable>
-        <Pressable style={styles.primary} onPress={save}>
-          <Text style={styles.primaryText}>Save record</Text>
-        </Pressable>
+        {showRecordForm ? (
+          <>
+            <View style={styles.grid}>
+              <TextInput value={weight} onChangeText={setWeight} placeholder="Weight kg" placeholderTextColor="#6E788A" keyboardType="numeric" style={styles.input} />
+              <TextInput value={waist} onChangeText={setWaist} placeholder="Waist cm" placeholderTextColor="#6E788A" keyboardType="numeric" style={styles.input} />
+              <TextInput value={bicep} onChangeText={setBicep} placeholder="Bicep cm" placeholderTextColor="#6E788A" keyboardType="numeric" style={styles.input} />
+              <TextInput value={chest} onChangeText={setChest} placeholder="Chest cm" placeholderTextColor="#6E788A" keyboardType="numeric" style={styles.input} />
+              <TextInput value={legs} onChangeText={setLegs} placeholder="Both legs cm" placeholderTextColor="#6E788A" keyboardType="numeric" style={styles.input} />
+              <TextInput value={singleLeg} onChangeText={setSingleLeg} placeholder="Single leg cm" placeholderTextColor="#6E788A" keyboardType="numeric" style={styles.input} />
+            </View>
+            <Pressable style={styles.secondary} onPress={pickPhoto}>
+              <Text style={styles.secondaryText}>{photoUri ? "Progress photo attached" : "Attach local progress photo"}</Text>
+            </Pressable>
+            <Pressable style={styles.primary} onPress={save}>
+              <Text style={styles.primaryText}>Save record</Text>
+            </Pressable>
+          </>
+        ) : null}
       </View>
 
       <TrendChart title="Weight trend" values={records.map((record) => record.weight_kg).filter((value): value is number => value !== null)} suffix="kg" color="#188A5B" />
@@ -123,6 +188,10 @@ const styles = StyleSheet.create({
   panel: { gap: 10, padding: 12, borderRadius: 8, backgroundColor: "#111827", borderWidth: 1, borderColor: "#253246" },
   panelTitle: { color: "#F8FAFC", fontSize: 18, fontWeight: "900" },
   meta: { color: "#8B96A8", fontSize: 13 },
+  dataGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  dataCell: { flexBasis: "48%", minHeight: 62, borderRadius: 8, backgroundColor: "#0B1220", borderWidth: 1, borderColor: "#2B374D", justifyContent: "center", paddingHorizontal: 10 },
+  dataLabel: { color: "#8B96A8", fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
+  dataValue: { color: "#F8FAFC", fontSize: 14, fontWeight: "900", marginTop: 4, textTransform: "capitalize" },
   form: { gap: 10, padding: 12, borderRadius: 8, backgroundColor: "#111827", borderWidth: 1, borderColor: "#253246" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   input: { flexBasis: "48%", minHeight: 46, borderWidth: 1, borderColor: "#2B374D", borderRadius: 8, paddingHorizontal: 12, backgroundColor: "#0B1220", color: "#F8FAFC" },
