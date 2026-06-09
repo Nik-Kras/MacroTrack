@@ -158,7 +158,14 @@ export const NutritionScreen = ({ dateKey, totals, targets, onDateChange, onChan
     const carbs = Number(newFood.carbs);
     const fat = Number(newFood.fat);
     const kcal = Number(newFood.kcal) || protein * 4 + carbs * 4 + fat * 9;
-    if (!name || [protein, carbs, fat, kcal].some((value) => !Number.isFinite(value) || value < 0)) return;
+    if (!name) {
+      Alert.alert("Product name", "Enter a name before saving your product.");
+      return;
+    }
+    if ([protein, carbs, fat, kcal].some((value) => !Number.isFinite(value) || value < 0)) {
+      Alert.alert("Nutrition values", "Enter valid non-negative calories, protein, carbs, and fat.");
+      return;
+    }
     const food = await createCustomFood({
       name,
       barcode: newFood.barcode.trim() || null,

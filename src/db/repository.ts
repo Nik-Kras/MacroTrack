@@ -37,6 +37,22 @@ const ensureMigrations = async (db: Db) => {
   if (!profileColumns.some((column) => column.name === "onboarded")) {
     await db.execAsync("ALTER TABLE profile ADD COLUMN onboarded INTEGER NOT NULL DEFAULT 0");
   }
+  const existingUse = await db.getFirstAsync<{ log_count: number; body_count: number }>(
+    `SELECT
+       (SELECT COUNT(*) FROM log_entry) AS log_count,
+       (SELECT COUNT(*) FROM body_record) AS body_count`
+  );
+  if ((existingUse?.log_count ?? 0) > 0 || (existingUse?.body_count ?? 0) > 1) {
+    await db.runAsync(
+      `UPDATE profile
+       SET onboarded = 1
+       WHERE id = 1
+         AND onboarded = 0
+         AND birth_date IS NOT NULL
+         AND height_cm IS NOT NULL
+         AND desired_weight_kg IS NOT NULL`
+    );
+  }
 };
 
 const seedIfNeeded = async (db: Db) => {
@@ -145,14 +161,31 @@ export const searchFoods = async (query: string, filter?: keyof Food) => {
   const where: string[] = [];
   const params: SQLite.SQLiteBindValue[] = [];
   if (trimmed) {
-    where.push("(name LIKE ? OR name_ua LIKE ? OR aliases LIKE ? OR aliases_ua LIKE ?)");
-    params.push(`%${trimmed}%`, `%${trimmed}%`, `%${trimmed}%`, `%${trimmed}%`);
+    const terms = trimmed
+      .split(/\s+/)
+      .map((term) => term.replace(/[^\p{L}\p{N}_]+/gu, ""))
+      .filter(Boolean)
+      .map((term) => `${term}*`);
+    if (terms.length === 0) return [];
+    where.push("food_fts MATCH ?");
+    params.push(terms.join(" "));
   }
   if (filter) {
-    where.push(`${filter} = 1`);
+    where.push(`f.${filter} = 1`);
+  }
+  if (trimmed) {
+    return db.getAllAsync<Food>(
+      `SELECT f.*
+       FROM food f
+       JOIN food_fts ON food_fts.rowid = f.id
+       ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+       ORDER BY bm25(food_fts), f.is_seed DESC, f.name
+       LIMIT 60`,
+      ...params
+    );
   }
   return db.getAllAsync<Food>(
-    `SELECT * FROM food ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY is_seed DESC, name LIMIT 60`,
+    `SELECT f.* FROM food f ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY f.is_seed DESC, f.name LIMIT 60`,
     ...params
   );
 };
@@ -221,6 +254,20 @@ export const saveOnboardingProfile = async (
   const goal = goalDefaults[profile.goal_type];
   await db.withTransactionAsync(async () => {
     await db.runAsync(
+      `DELETE FROM body_record
+       WHERE id IN (
+         SELECT id FROM body_record
+         WHERE (SELECT COUNT(*) FROM body_record) = 1
+           AND weight_kg = 80
+           AND waist_cm = 90
+           AND bicep_cm IS NULL
+           AND chest_cm IS NULL
+           AND leg_both_cm IS NULL
+           AND single_leg_cm IS NULL
+           AND photo_uri IS NULL
+       )`
+    );
+    await db.runAsync(
       `UPDATE profile
        SET name = ?,
            onboarded = 1,
@@ -256,7 +303,6 @@ export const saveOnboardingProfile = async (
       goal.proteinGPerKg,
       goal.fatGPerKg
     );
-    await db.runAsync("DELETE FROM body_record");
     await db.runAsync(
       `INSERT INTO body_record
        (weight_kg, bicep_cm, chest_cm, waist_cm, leg_both_cm, single_leg_cm)

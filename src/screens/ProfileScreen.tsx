@@ -16,6 +16,8 @@ type Props = {
   onChanged: () => void;
 };
 
+type BodyMetricKey = "weight_kg" | "waist_cm" | "bicep_cm" | "chest_cm" | "leg_both_cm" | "single_leg_cm";
+
 export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: Props) => {
   const [records, setRecords] = useState<BodyRecord[]>([]);
   const [showRecordForm, setShowRecordForm] = useState(false);
@@ -34,18 +36,39 @@ export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: P
   }, []);
 
   const currentWeight = latestWeight(records);
-  const latestRecord = [...records].reverse().find((record) =>
-    [record.weight_kg, record.waist_cm, record.bicep_cm, record.chest_cm, record.leg_both_cm, record.single_leg_cm].some((value) => value !== null)
-  );
   const startWeight = records.find((record) => record.weight_kg !== null)?.weight_kg ?? currentWeight;
   const projection = projectTargetDate(currentWeight, profile.desired_weight_kg, averageDeficit);
   const metricText = (current: number | null | undefined, desired: number | null | undefined, unit: string) =>
     `${current ? roundHalfUp(current) : "--"}${unit} -> ${desired ? roundHalfUp(desired) : "--"}${unit}`;
+  const metricValue = (key: BodyMetricKey, direction: "first" | "latest") => {
+    const list = direction === "first" ? records : [...records].reverse();
+    return list.find((record) => record[key] !== null)?.[key] ?? null;
+  };
+  const metricProgress = (key: BodyMetricKey, desired: number | null) => {
+    const first = metricValue(key, "first");
+    const latest = metricValue(key, "latest");
+    if (first === null || latest === null || desired === null) return null;
+    return weightProgress(first, latest, desired);
+  };
+  const metricRows: Array<{ label: string; key: BodyMetricKey; desired: number | null; unit: string }> = [
+    { label: "Weight", key: "weight_kg", desired: profile.desired_weight_kg, unit: " kg" },
+    { label: "Waist", key: "waist_cm", desired: profile.desired_waist_cm, unit: " cm" },
+    { label: "Bicep", key: "bicep_cm", desired: profile.desired_bicep_cm, unit: " cm" },
+    { label: "Chest", key: "chest_cm", desired: profile.desired_chest_cm, unit: " cm" },
+    { label: "Both legs", key: "leg_both_cm", desired: profile.desired_leg_both_cm, unit: " cm" },
+    { label: "Single leg", key: "single_leg_cm", desired: profile.desired_single_leg_cm, unit: " cm" }
+  ];
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
     const uri = result.canceled ? undefined : result.assets[0]?.uri;
-    if (uri) setPhotoUri(persistLocalImage(uri, "body"));
+    if (uri) {
+      try {
+        setPhotoUri(persistLocalImage(uri, "body"));
+      } catch {
+        Alert.alert("Photo not saved", "MacroTrack could not copy that image into local app storage.");
+      }
+    }
   };
 
   const save = async () => {
@@ -124,30 +147,19 @@ export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: P
       <View style={styles.panel}>
         <Text style={styles.panelTitle}>Body parameters</Text>
         <View style={styles.dataGrid}>
-          <View style={styles.dataCell}>
-            <Text style={styles.dataLabel}>Weight</Text>
-            <Text style={styles.dataValue}>{metricText(latestRecord?.weight_kg, profile.desired_weight_kg, " kg")}</Text>
-          </View>
-          <View style={styles.dataCell}>
-            <Text style={styles.dataLabel}>Waist</Text>
-            <Text style={styles.dataValue}>{metricText(latestRecord?.waist_cm, profile.desired_waist_cm, " cm")}</Text>
-          </View>
-          <View style={styles.dataCell}>
-            <Text style={styles.dataLabel}>Bicep</Text>
-            <Text style={styles.dataValue}>{metricText(latestRecord?.bicep_cm, profile.desired_bicep_cm, " cm")}</Text>
-          </View>
-          <View style={styles.dataCell}>
-            <Text style={styles.dataLabel}>Chest</Text>
-            <Text style={styles.dataValue}>{metricText(latestRecord?.chest_cm, profile.desired_chest_cm, " cm")}</Text>
-          </View>
-          <View style={styles.dataCell}>
-            <Text style={styles.dataLabel}>Both legs</Text>
-            <Text style={styles.dataValue}>{metricText(latestRecord?.leg_both_cm, profile.desired_leg_both_cm, " cm")}</Text>
-          </View>
-          <View style={styles.dataCell}>
-            <Text style={styles.dataLabel}>Single leg</Text>
-            <Text style={styles.dataValue}>{metricText(latestRecord?.single_leg_cm, profile.desired_single_leg_cm, " cm")}</Text>
-          </View>
+          {metricRows.map((metric) => {
+            const current = metricValue(metric.key, "latest");
+            const progress = metricProgress(metric.key, metric.desired);
+            return (
+              <View key={metric.key} style={styles.dataCell}>
+                <Text style={styles.dataLabel}>{metric.label}</Text>
+                <Text style={styles.dataValue}>{metricText(current, metric.desired, metric.unit)}</Text>
+                <View style={styles.metricTrack}>
+                  <View style={[styles.metricFill, { width: `${(progress ?? 0) * 100}%` }]} />
+                </View>
+              </View>
+            );
+          })}
         </View>
       </View>
 
@@ -189,9 +201,11 @@ const styles = StyleSheet.create({
   panelTitle: { color: "#F8FAFC", fontSize: 18, fontWeight: "900" },
   meta: { color: "#8B96A8", fontSize: 13 },
   dataGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  dataCell: { flexBasis: "48%", minHeight: 62, borderRadius: 8, backgroundColor: "#0B1220", borderWidth: 1, borderColor: "#2B374D", justifyContent: "center", paddingHorizontal: 10 },
+  dataCell: { flexBasis: "48%", minHeight: 74, borderRadius: 8, backgroundColor: "#0B1220", borderWidth: 1, borderColor: "#2B374D", justifyContent: "center", paddingHorizontal: 10, paddingVertical: 8 },
   dataLabel: { color: "#8B96A8", fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
   dataValue: { color: "#F8FAFC", fontSize: 14, fontWeight: "900", marginTop: 4, textTransform: "capitalize" },
+  metricTrack: { height: 6, marginTop: 8, borderRadius: 3, overflow: "hidden", backgroundColor: "#263044" },
+  metricFill: { height: "100%", borderRadius: 3, backgroundColor: "#22C55E" },
   form: { gap: 10, padding: 12, borderRadius: 8, backgroundColor: "#111827", borderWidth: 1, borderColor: "#253246" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   input: { flexBasis: "48%", minHeight: 46, borderWidth: 1, borderColor: "#2B374D", borderRadius: 8, paddingHorizontal: 12, backgroundColor: "#0B1220", color: "#F8FAFC" },

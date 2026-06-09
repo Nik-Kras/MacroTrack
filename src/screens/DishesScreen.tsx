@@ -1,7 +1,7 @@
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { roundHalfUp } from "../domain/rounding";
 import type { CustomDish, Food } from "../domain/types";
 import { createCustomDish, getCustomDishes, logDish, searchFoods } from "../db/repository";
@@ -31,7 +31,13 @@ export const DishesScreen = ({ onChanged }: { onChanged: () => void }) => {
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
     const uri = result.canceled ? undefined : result.assets[0]?.uri;
-    if (uri) setPhotoUri(persistLocalImage(uri, "dish"));
+    if (uri) {
+      try {
+        setPhotoUri(persistLocalImage(uri, "dish"));
+      } catch {
+        Alert.alert("Photo not saved", "MacroTrack could not copy that image into local app storage.");
+      }
+    }
   };
 
   const save = async () => {

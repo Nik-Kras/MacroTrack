@@ -32,7 +32,10 @@ const isValidDateKey = (value: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(year ?? 0, (month ?? 1) - 1, day ?? 1);
-  return date.getFullYear() === year && date.getMonth() === (month ?? 1) - 1 && date.getDate() === day;
+  if (date.getFullYear() !== year || date.getMonth() !== (month ?? 1) - 1 || date.getDate() !== day) return false;
+  const today = new Date();
+  const age = today.getFullYear() - date.getFullYear();
+  return date <= today && age >= 13 && age <= 110;
 };
 
 export const OnboardingScreen = ({ onComplete }: Props) => {
@@ -64,7 +67,7 @@ export const OnboardingScreen = ({ onComplete }: Props) => {
       return;
     }
     if (!isValidDateKey(birthDate.trim())) {
-      Alert.alert("Birth date", "Use YYYY-MM-DD format so MacroTrack can calculate age correctly.");
+      Alert.alert("Birth date", "Use a real YYYY-MM-DD birth date for a user between 13 and 110 years old.");
       return;
     }
 
