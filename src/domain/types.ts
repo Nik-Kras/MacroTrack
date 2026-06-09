@@ -110,3 +110,14 @@ export type CustomDish = {
   total_fat_g: number;
   total_carbs_g: number;
 };
+
+export type SavedMeal = {
+  id: number;
+  name: string;
+  item_count: number;
+  total_kcal: number;
+  total_protein_g: number;
+  total_fat_g: number;
+  total_carbs_g: number;
+  created_at: string;
+};

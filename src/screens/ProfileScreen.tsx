@@ -1,12 +1,13 @@
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { MacroBar } from "../components/Bars";
 import { TrendChart } from "../components/TrendChart";
 import { latestWeight, projectTargetDate, weightProgress } from "../domain/analytics";
 import { roundHalfUp } from "../domain/rounding";
 import type { BodyRecord, MacroTotals, Profile } from "../domain/types";
 import { getBodyRecords, saveBodyRecord } from "../db/repository";
+import { persistLocalImage } from "../utils/localMedia";
 
 type Props = {
   profile: Profile;
@@ -32,15 +33,17 @@ export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: P
   }, []);
 
   const currentWeight = latestWeight(records);
+  const startWeight = records.find((record) => record.weight_kg !== null)?.weight_kg ?? currentWeight;
   const projection = projectTargetDate(currentWeight, profile.desired_weight_kg, averageDeficit);
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
-    if (!result.canceled) setPhotoUri(result.assets[0]?.uri);
+    const uri = result.canceled ? undefined : result.assets[0]?.uri;
+    if (uri) setPhotoUri(persistLocalImage(uri, "body"));
   };
 
   const save = async () => {
-    await saveBodyRecord({
+    const saved = await saveBodyRecord({
       weight_kg: Number(weight) || null,
       waist_cm: Number(waist) || null,
       bicep_cm: Number(bicep) || null,
@@ -49,6 +52,10 @@ export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: P
       single_leg_cm: Number(singleLeg) || null,
       photo_uri: photoUri ?? null
     });
+    if (!saved) {
+      Alert.alert("Add a record", "Enter at least one measurement or attach a progress photo.");
+      return;
+    }
     setWeight("");
     setWaist("");
     setBicep("");
@@ -71,9 +78,16 @@ export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: P
         <Text style={styles.meta}>
           {profile.goal_type.replace("_", " ")} · {roundHalfUp(currentWeight)} kg · {roundHalfUp(targets.kcal)} kcal
         </Text>
-        <MacroBar label="Weight goal" value={weightProgress(80, currentWeight, profile.desired_weight_kg) * 100} target={100} unit="%" tone="green" />
+        <MacroBar
+          label="Weight goal"
+          value={weightProgress(startWeight, currentWeight, profile.desired_weight_kg) * 100}
+          target={100}
+          unit="%"
+          tone="green"
+          variant="dark"
+        />
         <Text style={styles.meta}>
-          Desired {profile.desired_weight_kg} kg
+          From {roundHalfUp(startWeight)} kg to desired {profile.desired_weight_kg} kg
           {projection ? ` · projected ${projection.toLocaleDateString()}` : " · projection needs more stable history"}
         </Text>
       </View>
@@ -103,17 +117,17 @@ export const ProfileScreen = ({ profile, targets, averageDeficit, onChanged }: P
 };
 
 const styles = StyleSheet.create({
-  content: { padding: 18, gap: 18, backgroundColor: "#FFFCF7" },
-  eyebrow: { color: "#6B7280", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-  title: { color: "#111827", fontSize: 30, fontWeight: "900", letterSpacing: 0 },
-  panel: { gap: 10 },
-  panelTitle: { color: "#111827", fontSize: 18, fontWeight: "900" },
-  meta: { color: "#6B7280", fontSize: 13 },
-  form: { gap: 10 },
+  content: { padding: 18, gap: 18, backgroundColor: "#090F18" },
+  eyebrow: { color: "#8B96A8", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+  title: { color: "#F8FAFC", fontSize: 30, fontWeight: "900", letterSpacing: 0 },
+  panel: { gap: 10, padding: 12, borderRadius: 8, backgroundColor: "#111827", borderWidth: 1, borderColor: "#253246" },
+  panelTitle: { color: "#F8FAFC", fontSize: 18, fontWeight: "900" },
+  meta: { color: "#8B96A8", fontSize: 13 },
+  form: { gap: 10, padding: 12, borderRadius: 8, backgroundColor: "#111827", borderWidth: 1, borderColor: "#253246" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  input: { flexBasis: "48%", minHeight: 46, borderWidth: 1, borderColor: "#DED6CA", borderRadius: 8, paddingHorizontal: 12 },
-  secondary: { minHeight: 44, borderRadius: 8, backgroundColor: "#EDE7DA", alignItems: "center", justifyContent: "center" },
-  secondaryText: { color: "#111827", fontWeight: "800" },
-  primary: { minHeight: 46, borderRadius: 8, backgroundColor: "#111827", alignItems: "center", justifyContent: "center" },
+  input: { flexBasis: "48%", minHeight: 46, borderWidth: 1, borderColor: "#2B374D", borderRadius: 8, paddingHorizontal: 12, backgroundColor: "#0B1220", color: "#F8FAFC" },
+  secondary: { minHeight: 44, borderRadius: 8, backgroundColor: "#121A27", borderWidth: 1, borderColor: "#253246", alignItems: "center", justifyContent: "center" },
+  secondaryText: { color: "#D7E7FF", fontWeight: "800" },
+  primary: { minHeight: 46, borderRadius: 8, backgroundColor: "#2388FF", alignItems: "center", justifyContent: "center" },
   primaryText: { color: "#FFFFFF", fontWeight: "900" }
 });

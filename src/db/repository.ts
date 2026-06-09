@@ -3,7 +3,7 @@ import { seedFoods } from "../data/seedFoods";
 import { toLocalDateKey, addDays } from "../domain/dates";
 import { macrosForFoodGrams } from "../domain/macros";
 import { defaultProfile } from "../domain/targets";
-import type { BodyRecord, CustomDish, Food, LogEntry, MacroTotals, Profile } from "../domain/types";
+import type { BodyRecord, CustomDish, Food, LogEntry, MacroTotals, Profile, SavedMeal } from "../domain/types";
 import { schemaSql } from "./schema";
 
 type Db = SQLite.SQLiteDatabase;
@@ -17,7 +17,10 @@ const openDatabase = async () => {
 };
 
 export const getDatabase = async () => {
-  initializedDatabasePromise ??= initializeDatabase();
+  initializedDatabasePromise ??= initializeDatabase().catch((error) => {
+    initializedDatabasePromise = null;
+    throw error;
+  });
   return initializedDatabasePromise;
 };
 
@@ -157,17 +160,27 @@ export const createCustomFood = async (
   }
 ) => {
   const db = await getDatabase();
+  const flags = curatedFlags(food);
   const result = await db.runAsync(
     `INSERT INTO food
-    (kind, is_seed, category, name, aliases, barcode, kcal, protein_g, fat_g, carbs_g)
-    VALUES ('PRODUCT', 0, 'PRODUCT', ?, ?, ?, ?, ?, ?, ?)`,
+    (kind, is_seed, category, name, aliases, barcode, kcal, protein_g, fat_g, carbs_g,
+     low_kcal, high_kcal, low_fat, high_fat, low_protein, high_protein, low_carbs, high_carbs)
+    VALUES ('PRODUCT', 0, 'PRODUCT', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     food.name,
     food.aliases ?? null,
     food.barcode ?? null,
     food.kcal,
     food.protein_g,
     food.fat_g,
-    food.carbs_g
+    food.carbs_g,
+    flags.low_kcal,
+    flags.high_kcal,
+    flags.low_fat,
+    flags.high_fat,
+    flags.low_protein,
+    flags.high_protein,
+    flags.low_carbs,
+    flags.high_carbs
   );
   return db.getFirstAsync<Food>("SELECT * FROM food WHERE id = ?", result.lastInsertRowId);
 };
@@ -183,6 +196,16 @@ export const getBodyRecords = async () => {
 };
 
 export const saveBodyRecord = async (record: Partial<BodyRecord>) => {
+  const hasMetric = [
+    record.weight_kg,
+    record.bicep_cm,
+    record.chest_cm,
+    record.waist_cm,
+    record.leg_both_cm,
+    record.single_leg_cm,
+    record.photo_uri
+  ].some((value) => value !== null && value !== undefined && value !== "");
+  if (!hasMetric) return false;
   const db = await getDatabase();
   await db.runAsync(
     `INSERT INTO body_record
@@ -196,6 +219,7 @@ export const saveBodyRecord = async (record: Partial<BodyRecord>) => {
     record.single_leg_cm ?? null,
     record.photo_uri ?? null
   );
+  return true;
 };
 
 export const getLogEntries = async (dateKey = toLocalDateKey()) => {
@@ -328,7 +352,11 @@ export const createCustomDish = async (name: string, servings: number, ingredien
 export const getCustomDishes = async () => {
   const db = await getDatabase();
   return db.getAllAsync<CustomDish>(
-    `SELECT d.*, m.total_kcal, m.total_protein_g, m.total_fat_g, m.total_carbs_g
+    `SELECT d.*,
+            (m.total_protein_g * 4.0 + m.total_fat_g * 9.0 + m.total_carbs_g * 4.0) AS total_kcal,
+            m.total_protein_g,
+            m.total_fat_g,
+            m.total_carbs_g
      FROM custom_dish d
      JOIN custom_dish_macros m ON m.dish_id = d.id
      ORDER BY d.updated_at DESC`
@@ -338,6 +366,9 @@ export const getCustomDishes = async () => {
 export const logDish = async (dish: CustomDish, servingsUsed: number, dateKey = toLocalDateKey()) => {
   const db = await getDatabase();
   const scale = servingsUsed / dish.servings;
+  const protein_g = dish.total_protein_g * scale;
+  const fat_g = dish.total_fat_g * scale;
+  const carbs_g = dish.total_carbs_g * scale;
   await db.runAsync(
     `INSERT INTO log_entry
     (log_date, source_type, custom_dish_id, servings_used, kcal, protein_g, fat_g, carbs_g, photo_uri)
@@ -345,17 +376,123 @@ export const logDish = async (dish: CustomDish, servingsUsed: number, dateKey = 
     dateKey,
     dish.id,
     servingsUsed,
-    dish.total_kcal * scale,
-    dish.total_protein_g * scale,
-    dish.total_fat_g * scale,
-    dish.total_carbs_g * scale,
+    protein_g * 4 + fat_g * 9 + carbs_g * 4,
+    protein_g,
+    fat_g,
+    carbs_g,
     dish.photo_uri
   );
+};
+
+export const getSavedMeals = async () => {
+  const db = await getDatabase();
+  return db.getAllAsync<SavedMeal>(
+    `SELECT sm.id,
+            sm.name,
+            sm.created_at,
+            COUNT(smi.id) AS item_count,
+            COALESCE(SUM(CASE
+              WHEN smi.source_type = 'FOOD' THEN f.protein_g * smi.grams / 100.0 * 4.0 + f.fat_g * smi.grams / 100.0 * 9.0 + f.carbs_g * smi.grams / 100.0 * 4.0
+              ELSE dm.total_protein_g * smi.servings_used / dm.servings * 4.0 + dm.total_fat_g * smi.servings_used / dm.servings * 9.0 + dm.total_carbs_g * smi.servings_used / dm.servings * 4.0
+            END), 0) AS total_kcal,
+            COALESCE(SUM(CASE WHEN smi.source_type = 'FOOD' THEN f.protein_g * smi.grams / 100.0 ELSE dm.total_protein_g * smi.servings_used / dm.servings END), 0) AS total_protein_g,
+            COALESCE(SUM(CASE WHEN smi.source_type = 'FOOD' THEN f.fat_g * smi.grams / 100.0 ELSE dm.total_fat_g * smi.servings_used / dm.servings END), 0) AS total_fat_g,
+            COALESCE(SUM(CASE WHEN smi.source_type = 'FOOD' THEN f.carbs_g * smi.grams / 100.0 ELSE dm.total_carbs_g * smi.servings_used / dm.servings END), 0) AS total_carbs_g
+     FROM saved_meal sm
+     LEFT JOIN saved_meal_item smi ON smi.saved_meal_id = sm.id
+     LEFT JOIN food f ON f.id = smi.food_id
+     LEFT JOIN custom_dish_macros dm ON dm.dish_id = smi.custom_dish_id
+     GROUP BY sm.id
+     ORDER BY sm.created_at DESC`
+  );
+};
+
+export const logSavedMeal = async (mealId: number, dateKey = toLocalDateKey()) => {
+  const db = await getDatabase();
+  const items = await db.getAllAsync<{
+    source_type: "FOOD" | "DISH";
+    food_id: number | null;
+    custom_dish_id: number | null;
+    grams: number | null;
+    serving_id: number | null;
+    quantity: number | null;
+    servings_used: number | null;
+    food_kcal: number | null;
+    food_protein_g: number | null;
+    food_fat_g: number | null;
+    food_carbs_g: number | null;
+    dish_servings: number | null;
+    total_protein_g: number | null;
+    total_fat_g: number | null;
+    total_carbs_g: number | null;
+    photo_uri: string | null;
+  }>(
+    `SELECT smi.*,
+            f.kcal AS food_kcal,
+            f.protein_g AS food_protein_g,
+            f.fat_g AS food_fat_g,
+            f.carbs_g AS food_carbs_g,
+            cd.photo_uri,
+            dm.servings AS dish_servings,
+            dm.total_protein_g,
+            dm.total_fat_g,
+            dm.total_carbs_g
+     FROM saved_meal_item smi
+     LEFT JOIN food f ON f.id = smi.food_id
+     LEFT JOIN custom_dish cd ON cd.id = smi.custom_dish_id
+     LEFT JOIN custom_dish_macros dm ON dm.dish_id = smi.custom_dish_id
+     WHERE smi.saved_meal_id = ?
+     ORDER BY smi.position, smi.id`,
+    mealId
+  );
+
+  await db.withTransactionAsync(async () => {
+    for (const item of items) {
+      if (item.source_type === "FOOD" && item.food_id && item.grams !== null) {
+        const protein_g = ((item.food_protein_g ?? 0) * item.grams) / 100;
+        const fat_g = ((item.food_fat_g ?? 0) * item.grams) / 100;
+        const carbs_g = ((item.food_carbs_g ?? 0) * item.grams) / 100;
+        await db.runAsync(
+          `INSERT INTO log_entry
+          (log_date, source_type, food_id, grams, serving_id, quantity, kcal, protein_g, fat_g, carbs_g)
+          VALUES (?, 'FOOD', ?, ?, ?, ?, ?, ?, ?, ?)`,
+          dateKey,
+          item.food_id,
+          item.grams,
+          item.serving_id,
+          item.quantity,
+          protein_g * 4 + fat_g * 9 + carbs_g * 4,
+          protein_g,
+          fat_g,
+          carbs_g
+        );
+      } else if (item.source_type === "DISH" && item.custom_dish_id) {
+        const scale = (item.servings_used ?? 1) / (item.dish_servings ?? 1);
+        const protein_g = (item.total_protein_g ?? 0) * scale;
+        const fat_g = (item.total_fat_g ?? 0) * scale;
+        const carbs_g = (item.total_carbs_g ?? 0) * scale;
+        await db.runAsync(
+          `INSERT INTO log_entry
+          (log_date, source_type, custom_dish_id, servings_used, kcal, protein_g, fat_g, carbs_g, photo_uri)
+          VALUES (?, 'DISH', ?, ?, ?, ?, ?, ?, ?)`,
+          dateKey,
+          item.custom_dish_id,
+          item.servings_used ?? 1,
+          protein_g * 4 + fat_g * 9 + carbs_g * 4,
+          protein_g,
+          fat_g,
+          carbs_g,
+          item.photo_uri
+        );
+      }
+    }
+  });
 };
 
 export const createSavedMealFromToday = async (name: string, dateKey = toLocalDateKey()) => {
   const db = await getDatabase();
   const rows = await db.getAllAsync<LogEntry>("SELECT *, '' as name FROM log_entry WHERE log_date = ?", dateKey);
+  if (rows.length === 0) return false;
   await db.withTransactionAsync(async () => {
     const result = await db.runAsync("INSERT INTO saved_meal (name) VALUES (?)", name);
     for (const [index, row] of rows.entries()) {
@@ -375,6 +512,7 @@ export const createSavedMealFromToday = async (name: string, dateKey = toLocalDa
       );
     }
   });
+  return true;
 };
 
 export const dailySummaryCsv = (entries: LogEntry[]) => {
@@ -396,6 +534,17 @@ const unlockBadges = async (db: Db) => {
     await db.runAsync("INSERT OR IGNORE INTO achievement (code) VALUES ('STREAK_7')");
   }
 };
+
+const curatedFlags = (food: Pick<Food, "kcal" | "protein_g" | "fat_g" | "carbs_g">) => ({
+  low_kcal: food.kcal < 100 ? 1 : 0,
+  high_kcal: food.kcal >= 250 ? 1 : 0,
+  low_fat: food.fat_g < 3 ? 1 : 0,
+  high_fat: food.fat_g >= 15 ? 1 : 0,
+  low_protein: food.protein_g < 5 ? 1 : 0,
+  high_protein: food.protein_g >= 10 ? 1 : 0,
+  low_carbs: food.carbs_g < 10 ? 1 : 0,
+  high_carbs: food.carbs_g >= 25 ? 1 : 0
+});
 
 export const getSpanTotals = async (fromDate: string, toDate: string) => {
   const db = await getDatabase();

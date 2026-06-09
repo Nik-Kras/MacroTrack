@@ -28,17 +28,17 @@ export const TrendChart = ({ title, values, color = "#2563EB", suffix = "" }: Pr
         <Text style={styles.empty}>No data yet</Text>
       ) : (
         <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
-          <Line x1="0" y1={height - 18} x2={width} y2={height - 18} stroke="#DED6CA" strokeWidth="1" />
+          <Line x1="0" y1={height - 18} x2={width} y2={height - 18} stroke="#2B374D" strokeWidth="1" />
           <Polyline points={points.join(" ")} fill="none" stroke={color} strokeWidth="3" strokeLinejoin="round" />
           {clean.map((value, index) => {
             const [x, y] = points[index]?.split(",").map(Number) ?? [0, 0];
             return <Circle key={`${value}-${index}`} cx={x} cy={y} r="3.5" fill={color} />;
           })}
-          <SvgText x="0" y="13" fill="#6B7280" fontSize="11">
+          <SvgText x="0" y="13" fill="#8B96A8" fontSize="11">
             {Math.round(max)}
             {suffix}
           </SvgText>
-          <SvgText x="0" y={height - 3} fill="#6B7280" fontSize="11">
+          <SvgText x="0" y={height - 3} fill="#8B96A8" fontSize="11">
             {Math.round(min)}
             {suffix}
           </SvgText>
@@ -50,6 +50,6 @@ export const TrendChart = ({ title, values, color = "#2563EB", suffix = "" }: Pr
 
 const styles = StyleSheet.create({
   wrap: { gap: 8 },
-  title: { fontSize: 14, fontWeight: "800", color: "#111827" },
-  empty: { height: 120, color: "#6B7280", textAlignVertical: "center" }
+  title: { fontSize: 14, fontWeight: "800", color: "#F8FAFC" },
+  empty: { height: 120, color: "#8B96A8", textAlignVertical: "center" }
 });

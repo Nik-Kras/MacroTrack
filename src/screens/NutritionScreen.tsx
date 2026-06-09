@@ -5,7 +5,7 @@ import { MacroBar } from "../components/Bars";
 import { streakFromDates } from "../domain/analytics";
 import { addDays, toLocalDateKey } from "../domain/dates";
 import { roundHalfUp } from "../domain/rounding";
-import type { CustomDish, Food, LogEntry, MacroTotals } from "../domain/types";
+import type { CustomDish, Food, LogEntry, MacroTotals, SavedMeal } from "../domain/types";
 import {
   addFoodLog,
   copyPreviousDay,
@@ -19,7 +19,9 @@ import {
   getLoggedDates,
   getLogEntries,
   getRecentFoods,
+  getSavedMeals,
   logDish,
+  logSavedMeal,
   searchFoods,
   updateFoodLogGrams
 } from "../db/repository";
@@ -35,7 +37,7 @@ type Props = {
 };
 
 type SearchMode = "all" | "recent" | "frequent" | "my_foods";
-type AddMode = "food" | "product" | "dish";
+type AddMode = "food" | "product" | "dish" | "meal";
 
 const categories: Array<{ label: string; key: keyof Food }> = [
   { label: "Protein", key: "high_protein" },
@@ -64,6 +66,7 @@ export const NutritionScreen = ({ dateKey, totals, targets, onDateChange, onChan
   const [category, setCategory] = useState<keyof Food | undefined>();
   const [foods, setFoods] = useState<Food[]>([]);
   const [dishes, setDishes] = useState<CustomDish[]>([]);
+  const [savedMeals, setSavedMeals] = useState<SavedMeal[]>([]);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [streak, setStreak] = useState(0);
   const [pendingFood, setPendingFood] = useState<Food | null>(null);
@@ -89,6 +92,7 @@ export const NutritionScreen = ({ dateKey, totals, targets, onDateChange, onChan
     setLog(await getLogEntries(dateKey));
     setStreak(streakFromDates(await getLoggedDates(), todayKey));
     setDishes(await getCustomDishes());
+    setSavedMeals(await getSavedMeals());
     if (searchMode === "recent") setFoods(await getRecentFoods());
     else if (searchMode === "frequent") setFoods(await getFrequentFoods());
     else {
@@ -269,7 +273,8 @@ export const NutritionScreen = ({ dateKey, totals, targets, onDateChange, onChan
         {[
           { key: "food", label: "Add food", icon: "add-circle-outline" },
           { key: "product", label: "Create product", icon: "create-outline" },
-          { key: "dish", label: "Log dish", icon: "restaurant-outline" }
+          { key: "dish", label: "Log dish", icon: "restaurant-outline" },
+          { key: "meal", label: "Saved meal", icon: "bookmark-outline" }
         ].map((item) => (
           <Pressable
             key={item.key}
@@ -281,6 +286,29 @@ export const NutritionScreen = ({ dateKey, totals, targets, onDateChange, onChan
           </Pressable>
         ))}
       </View>
+
+      {selectedEditorTitle ? (
+        <View style={styles.inlineEditor}>
+          <Text style={styles.editorTitle}>{selectedEditorTitle}</Text>
+          <View style={styles.editorRow}>
+            <TextInput value={amountText} onChangeText={setAmountText} keyboardType="numeric" style={styles.amountInput} />
+            <Text style={styles.unitLabel}>{pendingDish ? "servings" : "grams"}</Text>
+            <Pressable style={styles.confirm} onPress={pendingDish ? confirmDish : pendingFood ? confirmFood : confirmEdit}>
+              <Text style={styles.confirmText}>{pendingEntry ? "Save" : "Add to diary"}</Text>
+            </Pressable>
+            <Pressable
+              style={styles.cancel}
+              onPress={() => {
+                setPendingFood(null);
+                setPendingEntry(null);
+                setPendingDish(null);
+              }}
+            >
+              <Ionicons name="close-outline" size={20} color="#E8EEF8" />
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {addMode === "food" ? (
         <View style={styles.panel}>
@@ -346,6 +374,33 @@ export const NutritionScreen = ({ dateKey, totals, targets, onDateChange, onChan
         </View>
       ) : null}
 
+      {addMode === "meal" ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Log a saved meal</Text>
+          {savedMeals.length === 0 ? <Text style={styles.empty}>Save a day as a meal, then reuse it here.</Text> : null}
+          {savedMeals.map((meal) => (
+            <Pressable
+              key={meal.id}
+              onPress={async () => {
+                await logSavedMeal(meal.id, dateKey);
+                await refresh();
+                onChanged();
+              }}
+              style={styles.cell}
+            >
+              <View style={styles.cellCopy}>
+                <Text style={styles.cellTitle}>{meal.name}</Text>
+                <Text style={styles.meta}>
+                  {meal.item_count} {meal.item_count === 1 ? "item" : "items"} · {roundHalfUp(meal.total_kcal)} kcal · P{" "}
+                  {roundHalfUp(meal.total_protein_g)} C {roundHalfUp(meal.total_carbs_g)} F {roundHalfUp(meal.total_fat_g)}
+                </Text>
+              </View>
+              <Ionicons name="add-circle-outline" size={25} color="#4BA3FF" />
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
       {addMode === "dish" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Log a saved dish</Text>
@@ -365,29 +420,6 @@ export const NutritionScreen = ({ dateKey, totals, targets, onDateChange, onChan
         </View>
       ) : null}
 
-      {selectedEditorTitle ? (
-        <View style={styles.inlineEditor}>
-          <Text style={styles.editorTitle}>{selectedEditorTitle}</Text>
-          <View style={styles.editorRow}>
-            <TextInput value={amountText} onChangeText={setAmountText} keyboardType="numeric" style={styles.amountInput} />
-            <Text style={styles.unitLabel}>{pendingDish ? "servings" : "grams"}</Text>
-            <Pressable style={styles.confirm} onPress={pendingDish ? confirmDish : pendingFood ? confirmFood : confirmEdit}>
-              <Text style={styles.confirmText}>{pendingEntry ? "Save" : "Add to diary"}</Text>
-            </Pressable>
-            <Pressable
-              style={styles.cancel}
-              onPress={() => {
-                setPendingFood(null);
-                setPendingEntry(null);
-                setPendingDish(null);
-              }}
-            >
-              <Ionicons name="close-outline" size={20} color="#E8EEF8" />
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
       <View style={styles.actions}>
         <Pressable
           style={styles.action}
@@ -403,7 +435,12 @@ export const NutritionScreen = ({ dateKey, totals, targets, onDateChange, onChan
         <Pressable
           style={styles.action}
           onPress={async () => {
-            await createSavedMealFromToday(`Meal from ${dateKey}`, dateKey);
+            const saved = await createSavedMealFromToday(`Meal from ${dateKey}`, dateKey);
+            if (!saved) {
+              Alert.alert("Saved meal", "Add food to this day before saving it as a reusable meal.");
+              return;
+            }
+            await refresh();
             Alert.alert("Saved meal", "This day was saved as a reusable meal.");
           }}
         >

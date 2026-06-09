@@ -65,7 +65,7 @@ export default function App() {
 
   return (
     <View style={styles.safe}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" />
       <View style={styles.app}>{render()}</View>
       <TabBar
         active={tab}
@@ -82,6 +82,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#090F18", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0 },
   app: { flex: 1 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
-  loadingTitle: { fontSize: 32, color: "#111827", fontWeight: "900", letterSpacing: 0 },
-  loadingText: { color: "#6B7280", fontWeight: "700" }
+  loadingTitle: { fontSize: 32, color: "#F8FAFC", fontWeight: "900", letterSpacing: 0 },
+  loadingText: { color: "#8B96A8", fontWeight: "700" }
 });

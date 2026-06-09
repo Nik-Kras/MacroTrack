@@ -5,6 +5,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { roundHalfUp } from "../domain/rounding";
 import type { CustomDish, Food } from "../domain/types";
 import { createCustomDish, getCustomDishes, logDish, searchFoods } from "../db/repository";
+import { persistLocalImage } from "../utils/localMedia";
 
 export const DishesScreen = ({ onChanged }: { onChanged: () => void }) => {
   const [dishes, setDishes] = useState<CustomDish[]>([]);
@@ -29,7 +30,8 @@ export const DishesScreen = ({ onChanged }: { onChanged: () => void }) => {
 
   const pickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
-    if (!result.canceled) setPhotoUri(result.assets[0]?.uri);
+    const uri = result.canceled ? undefined : result.assets[0]?.uri;
+    if (uri) setPhotoUri(persistLocalImage(uri, "dish"));
   };
 
   const save = async () => {
@@ -50,7 +52,7 @@ export const DishesScreen = ({ onChanged }: { onChanged: () => void }) => {
           <Text style={styles.title}>Dishes</Text>
         </View>
         <Pressable style={styles.iconButton} onPress={() => setCreating((value) => !value)}>
-          <Ionicons name={creating ? "close-outline" : "add-outline"} size={26} color="#111827" />
+          <Ionicons name={creating ? "close-outline" : "add-outline"} size={26} color="#E8EEF8" />
         </Pressable>
       </View>
 
@@ -59,7 +61,7 @@ export const DishesScreen = ({ onChanged }: { onChanged: () => void }) => {
           <TextInput value={name} onChangeText={setName} placeholder="Dish name" style={styles.input} />
           <TextInput value={servings} onChangeText={setServings} placeholder="People served" keyboardType="numeric" style={styles.input} />
           <Pressable style={styles.photoButton} onPress={pickPhoto}>
-            <Ionicons name="image-outline" size={20} color="#111827" />
+            <Ionicons name="image-outline" size={20} color="#7FB7FF" />
             <Text style={styles.photoText}>{photoUri ? "Photo attached" : "Add local photo"}</Text>
           </Pressable>
           {photoUri ? <Image source={{ uri: photoUri }} style={styles.preview} /> : null}
@@ -141,32 +143,32 @@ export const DishesScreen = ({ onChanged }: { onChanged: () => void }) => {
 };
 
 const styles = StyleSheet.create({
-  content: { padding: 18, gap: 18, backgroundColor: "#FFFCF7" },
+  content: { padding: 18, gap: 18, backgroundColor: "#090F18" },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  eyebrow: { color: "#6B7280", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-  title: { color: "#111827", fontSize: 30, fontWeight: "900", letterSpacing: 0 },
-  iconButton: { width: 44, height: 44, borderRadius: 8, backgroundColor: "#EDE7DA", alignItems: "center", justifyContent: "center" },
-  form: { gap: 10, paddingBottom: 8 },
-  input: { minHeight: 46, borderWidth: 1, borderColor: "#DED6CA", borderRadius: 8, paddingHorizontal: 12 },
-  photoButton: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 8, backgroundColor: "#EDE7DA" },
-  photoText: { fontWeight: "800", color: "#111827" },
-  preview: { height: 150, borderRadius: 8, backgroundColor: "#EDE7DA" },
+  eyebrow: { color: "#8B96A8", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+  title: { color: "#F8FAFC", fontSize: 30, fontWeight: "900", letterSpacing: 0 },
+  iconButton: { width: 44, height: 44, borderRadius: 8, backgroundColor: "#121A27", borderWidth: 1, borderColor: "#253246", alignItems: "center", justifyContent: "center" },
+  form: { gap: 10, padding: 12, borderRadius: 8, backgroundColor: "#111827", borderWidth: 1, borderColor: "#253246" },
+  input: { minHeight: 46, borderWidth: 1, borderColor: "#2B374D", borderRadius: 8, paddingHorizontal: 12, backgroundColor: "#0B1220", color: "#F8FAFC" },
+  photoButton: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 8, backgroundColor: "#121A27", borderWidth: 1, borderColor: "#253246" },
+  photoText: { fontWeight: "800", color: "#D7E7FF" },
+  preview: { height: 150, borderRadius: 8, backgroundColor: "#121A27" },
   ingredientPick: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8 },
   ingredient: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 8 },
-  grams: { width: 90, minHeight: 40, borderWidth: 1, borderColor: "#DED6CA", borderRadius: 8, paddingHorizontal: 10, textAlign: "right" },
-  primary: { minHeight: 46, borderRadius: 8, backgroundColor: "#111827", alignItems: "center", justifyContent: "center" },
+  grams: { width: 90, minHeight: 40, borderWidth: 1, borderColor: "#2B374D", borderRadius: 8, paddingHorizontal: 10, textAlign: "right", backgroundColor: "#0B1220", color: "#F8FAFC" },
+  primary: { minHeight: 46, borderRadius: 8, backgroundColor: "#2388FF", alignItems: "center", justifyContent: "center" },
   primaryText: { color: "#FFFFFF", fontWeight: "900" },
   grid: { gap: 14 },
-  empty: { color: "#6B7280" },
-  card: { overflow: "hidden", borderRadius: 8, borderWidth: 1, borderColor: "#E7E1D6", backgroundColor: "#FFFFFF" },
-  image: { height: 170, width: "100%", backgroundColor: "#EDE7DA" },
-  placeholder: { height: 170, alignItems: "center", justifyContent: "center", backgroundColor: "#EDE7DA" },
+  empty: { color: "#8B96A8" },
+  card: { overflow: "hidden", borderRadius: 8, borderWidth: 1, borderColor: "#253246", backgroundColor: "#111827" },
+  image: { height: 170, width: "100%", backgroundColor: "#121A27" },
+  placeholder: { height: 170, alignItems: "center", justifyContent: "center", backgroundColor: "#121A27" },
   cardBody: { padding: 13, gap: 6 },
-  cardTitle: { fontSize: 17, fontWeight: "900", color: "#111827" },
-  cellTitle: { fontSize: 14, fontWeight: "800", color: "#111827" },
-  meta: { color: "#6B7280", fontSize: 12 },
+  cardTitle: { fontSize: 17, fontWeight: "900", color: "#F8FAFC" },
+  cellTitle: { fontSize: 14, fontWeight: "800", color: "#F8FAFC" },
+  meta: { color: "#8B96A8", fontSize: 12 },
   useRow: { flexDirection: "row", gap: 8, marginTop: 4 },
-  useInput: { width: 70, minHeight: 40, borderWidth: 1, borderColor: "#DED6CA", borderRadius: 8, textAlign: "center" },
-  useButton: { flex: 1, borderRadius: 8, backgroundColor: "#188A5B", alignItems: "center", justifyContent: "center" },
+  useInput: { width: 70, minHeight: 40, borderWidth: 1, borderColor: "#2B374D", borderRadius: 8, textAlign: "center", backgroundColor: "#0B1220", color: "#F8FAFC" },
+  useButton: { flex: 1, borderRadius: 8, backgroundColor: "#2388FF", alignItems: "center", justifyContent: "center" },
   useText: { color: "#FFFFFF", fontWeight: "900" }
 });

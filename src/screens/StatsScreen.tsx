@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { TrendChart } from "../components/TrendChart";
-import { addDays, toLocalDateKey } from "../domain/dates";
+import { addDays, daysBetween, toLocalDateKey } from "../domain/dates";
 import { roundHalfUp } from "../domain/rounding";
 import type { MacroTotals } from "../domain/types";
 import { getBodyRecords, getSpanTotals } from "../db/repository";
@@ -29,7 +29,8 @@ export const StatsScreen = ({ targets }: { targets: MacroTotals }) => {
   }, [from, today]);
 
   const totalKcal = totals.reduce((sum, row) => sum + row.kcal, 0);
-  const deficit = totalKcal - targets.kcal * Math.max(totals.length, 1);
+  const spanDays = span === "all" ? Math.max(totals.length, 1) : Math.max(daysBetween(from, today) + 1, 1);
+  const deficit = totalKcal - targets.kcal * spanDays;
 
   const exportSummary = async () => {
     const csv = ["date,kcal,protein_g,fat_g,carbs_g", ...totals.map((row) => `${row.log_date},${row.kcal},${row.protein_g},${row.fat_g},${row.carbs_g}`)].join("\n");
@@ -62,24 +63,24 @@ export const StatsScreen = ({ targets }: { targets: MacroTotals }) => {
       <TrendChart title="Protein" values={totals.map((row) => row.protein_g)} color="#2563EB" suffix="g" />
       <TrendChart title="Carbs" values={totals.map((row) => row.carbs_g)} color="#B7791F" suffix="g" />
       <TrendChart title="Fat" values={totals.map((row) => row.fat_g)} color="#C2410C" suffix="g" />
-      <TrendChart title="Body weight" values={weights} color="#111827" suffix="kg" />
+      <TrendChart title="Body weight" values={weights} color="#2E9BFF" suffix="kg" />
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
-  content: { padding: 18, gap: 18, backgroundColor: "#FFFCF7" },
-  eyebrow: { color: "#6B7280", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
-  title: { color: "#111827", fontSize: 30, fontWeight: "900", letterSpacing: 0 },
+  content: { padding: 18, gap: 18, backgroundColor: "#090F18" },
+  eyebrow: { color: "#8B96A8", fontSize: 12, fontWeight: "900", textTransform: "uppercase" },
+  title: { color: "#F8FAFC", fontSize: 30, fontWeight: "900", letterSpacing: 0 },
   tabs: { flexDirection: "row", gap: 8 },
-  pill: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 8, backgroundColor: "#F1ECE2" },
-  pillActive: { backgroundColor: "#111827" },
-  pillText: { color: "#4B5563", fontWeight: "800", textTransform: "capitalize" },
+  pill: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 8, backgroundColor: "#121A27", borderWidth: 1, borderColor: "#253246" },
+  pillActive: { backgroundColor: "#2388FF", borderColor: "#2388FF" },
+  pillText: { color: "#A7B2C4", fontWeight: "800", textTransform: "capitalize" },
   pillTextActive: { color: "#FFFFFF" },
-  summary: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 },
-  summaryLabel: { color: "#6B7280", fontWeight: "800" },
-  summaryNumber: { color: "#188A5B", fontSize: 24, fontWeight: "900" },
-  surplus: { color: "#C2410C" },
-  export: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, backgroundColor: "#EDE7DA" },
-  exportText: { color: "#111827", fontWeight: "800" }
+  summary: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, padding: 12, borderRadius: 8, backgroundColor: "#111827", borderWidth: 1, borderColor: "#253246" },
+  summaryLabel: { color: "#8B96A8", fontWeight: "800" },
+  summaryNumber: { color: "#22C55E", fontSize: 24, fontWeight: "900" },
+  surplus: { color: "#F87171" },
+  export: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 8, backgroundColor: "#121A27", borderWidth: 1, borderColor: "#253246" },
+  exportText: { color: "#D7E7FF", fontWeight: "800" }
 });
