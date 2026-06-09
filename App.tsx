@@ -79,7 +79,7 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#FFFCF7", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0 },
+  safe: { flex: 1, backgroundColor: "#090F18", paddingTop: Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0 },
   app: { flex: 1 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
   loadingTitle: { fontSize: 32, color: "#111827", fontWeight: "900", letterSpacing: 0 },

@@ -15,7 +15,7 @@ export const TabBar = ({ active, onChange }: { active: Tab; onChange: (tab: Tab)
       const selected = active === tab.key;
       return (
         <Pressable key={tab.key} onPress={() => onChange(tab.key)} style={[styles.item, selected && styles.selected]}>
-          <Ionicons name={tab.icon} size={22} color={selected ? "#111827" : "#6B7280"} />
+          <Ionicons name={tab.icon} size={22} color={selected ? "#FFFFFF" : "#7B8798"} />
           <Text style={[styles.label, selected && styles.selectedLabel]}>{tab.label}</Text>
         </Pressable>
       );
@@ -27,14 +27,14 @@ const styles = StyleSheet.create({
   wrap: {
     flexDirection: "row",
     borderTopWidth: 1,
-    borderTopColor: "#E7E1D6",
-    backgroundColor: "#FFFCF7",
+    borderTopColor: "#253246",
+    backgroundColor: "#090F18",
     paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 12
   },
   item: { flex: 1, alignItems: "center", gap: 3, paddingVertical: 7, borderRadius: 8 },
-  selected: { backgroundColor: "#EDE7DA" },
-  label: { fontSize: 12, color: "#6B7280", fontWeight: "700" },
-  selectedLabel: { color: "#111827" }
+  selected: { backgroundColor: "#182235" },
+  label: { fontSize: 12, color: "#7B8798", fontWeight: "700" },
+  selectedLabel: { color: "#FFFFFF" }
 });
