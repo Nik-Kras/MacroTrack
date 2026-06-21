@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+<style>*{box-sizing:border-box}</style>
+</helmet>
+
+<div style="width:max-content;min-width:100%;min-height:100vh;box-sizing:border-box;padding:56px;background:radial-gradient(120% 120% at 50% 0%, #23272f 0%, #0b0d11 70%);font-family:'Manrope',sans-serif">
+
+  <div style="margin:0 0 40px">
+    <div style="display:flex;align-items:center;gap:11px;margin-bottom:8px">
+      <div style="width:30px;height:30px;border-radius:9px;background:#39E08A;display:flex;align-items:center;justify-content:center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3c0 4-5 5-5 9a5 5 0 0 0 10 0c0-1.6-.8-2.8-1.6-3.8-.3 1.2-1 1.8-1.7 1.8 1-3-1.7-5-1.7-7Z" stroke="#0E1116" stroke-width="2" stroke-linejoin="round"/></svg>
+      </div>
+      <span style="font-family:'Space Grotesk';font-size:26px;font-weight:700;color:#F2F4F7;letter-spacing:-.5px">MacroTrack</span>
+    </div>
+    <div style="font-size:14px;color:#8A93A2;font-weight:600;max-width:560px">Local-first macro &amp; body-composition tracker. Fully interactive prototype — tap the tabs, log foods, use a dish, edit your goals. Both builds run independently.</div>
+  </div>
+
+  <div style="display:flex;gap:64px;align-items:flex-start">
+
+    <!-- iOS -->
+    <div style="flex:none">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <svg width="15" height="18" viewBox="0 0 16 19" fill="#C4CCD6"><path d="M13 14.5c-.3.8-.7 1.5-1.2 2.2-.7.9-1.2 1.5-1.6 1.8-.6.5-1.2.7-1.9.7-.5 0-1-.1-1.7-.4-.7-.3-1.3-.4-1.8-.4-.5 0-1.1.1-1.8.4-.7.3-1.3.4-1.7.4-.7 0-1.4-.3-2-.8-.4-.3-1-1-1.6-2C-.5 14.6 0 12 .9 10.4c.6-1 1.5-1.7 2.6-1.7.5 0 1.1.2 1.9.5.8.3 1.3.4 1.5.4.2 0 .8-.2 1.7-.5.9-.3 1.6-.4 2.2-.4 1.5.1 2.6.7 3.4 1.8-1.3.8-2 2-2 3.5 0 1.2.4 2.1 1.3 2.9-.2.2-.2.1 0 0Z"/></svg>
+        <span style="font-size:13px;font-weight:700;color:#C4CCD6;letter-spacing:.3px">iOS</span>
+      </div>
+      <div style="width:412px;height:868px;background:linear-gradient(150deg,#2a2e35,#16181c);border-radius:58px;padding:11px;box-shadow:0 40px 90px -20px rgba(0,0,0,.7),0 0 0 1.5px #3a3f47;position:relative">
+        <div style="width:100%;height:100%;border-radius:47px;overflow:hidden;position:relative;background:#0E1116">
+          <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);width:118px;height:33px;background:#000;border-radius:99px;z-index:100;pointer-events:none"></div>
+          <dc-import name="MacroTrack" platform="ios" accent="#39E08A" userName="Alex" style="width:100%;height:100%" hint-size="100%,100%"></dc-import>
+        </div>
+      </div>
+    </div>
+
+    <!-- Android -->
+    <div style="flex:none">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#C4CCD6"><path d="M17.6 9.5 19 7a.4.4 0 0 0-.7-.4l-1.4 2.5A8.7 8.7 0 0 0 12 8c-1.8 0-3.5.5-4.9 1.1L5.7 6.6A.4.4 0 0 0 5 7l1.4 2.5A7.3 7.3 0 0 0 3 15h18a7.3 7.3 0 0 0-3.4-5.5ZM8 13a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Zm8 0a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Z"/></svg>
+        <span style="font-size:13px;font-weight:700;color:#C4CCD6;letter-spacing:.3px">Android</span>
+      </div>
+      <div style="width:406px;height:860px;background:linear-gradient(150deg,#202329,#121317);border-radius:42px;padding:7px;box-shadow:0 40px 90px -20px rgba(0,0,0,.7),0 0 0 1.5px #2f333b;position:relative">
+        <div style="width:100%;height:100%;border-radius:35px;overflow:hidden;position:relative;background:#0E1116">
+          <div style="position:absolute;top:13px;left:50%;transform:translateX(-50%);width:11px;height:11px;background:#000;border-radius:99px;z-index:100;box-shadow:0 0 0 2px #0E1116;pointer-events:none"></div>
+          <dc-import name="MacroTrack" platform="android" accent="#39E08A" userName="Sam" style="width:100%;height:100%" hint-size="100%,100%"></dc-import>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
