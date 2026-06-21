@@ -5,7 +5,7 @@ import { BottomSheet } from "@/components/BottomSheet";
 import { EditIcon } from "@/components/icons";
 import { Txt, Visual } from "@/components/ui";
 import { MC } from "@/data/seed";
-import { catColor, dayKey, dishMacros, findFood, isCookable, round, toCooked } from "@/lib/nutrition";
+import { catColor, dateForOffset, dayKey, dishMacros, findFood, isCookable, round, toCooked } from "@/lib/nutrition";
 import { useStore } from "@/store/store";
 import { colors, font } from "@/theme";
 import type { LogEntry } from "@/types";
@@ -18,7 +18,7 @@ export function DishSheet() {
 
   const m = dishMacros(d, state.foods);
   const sv = state.dishServings;
-  const dateWord = state.dayOffset === 0 ? "today" : state.dayOffset === -1 ? "yesterday" : (() => { const dt = new Date(2026, 5, 21); dt.setDate(dt.getDate() + state.dayOffset); return dt.toLocaleDateString("en", { month: "short", day: "numeric" }); })();
+  const dateWord = state.dayOffset === 0 ? "today" : state.dayOffset === -1 ? "yesterday" : dateForOffset(state.dayOffset).toLocaleDateString("en", { month: "short", day: "numeric" });
 
   const macros = [
     { label: "KCAL", value: round(m.perKcal * sv), color: acc },

@@ -6,6 +6,7 @@ import { TrashIcon } from "@/components/icons";
 import { Txt, Visual } from "@/components/ui";
 import { MC } from "@/data/seed";
 import {
+  dateForOffset,
   dayKey,
   findDish,
   findFood,
@@ -28,7 +29,7 @@ export function GramsSheet() {
   const { dateWord } = (() => {
     if (state.dayOffset === -1) return { dateWord: "yesterday" };
     if (state.dayOffset === 0) return { dateWord: "today" };
-    const d = new Date(2026, 5, 21); d.setDate(d.getDate() + state.dayOffset);
+    const d = dateForOffset(state.dayOffset);
     return { dateWord: d.toLocaleDateString("en", { month: "short", day: "numeric" }) };
   })();
 

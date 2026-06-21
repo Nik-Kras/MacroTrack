@@ -90,7 +90,7 @@ export function DishBuilderSheet() {
       {(DD.ing || []).length > 0 && (
         <View style={{ backgroundColor: colors.inset, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 14, marginBottom: 18 }}>
           <Txt style={{ fontSize: 13, fontFamily: font.dB, marginBottom: 4 }}>{`${round(tk / sv)} kcal · ${round(tp / sv)}P ${round(tc / sv)}C ${round(tf / sv)}F`}</Txt>
-          <Txt style={{ fontSize: 11.5, color: colors.muted, fontFamily: font.sb }}>{`per serving · ${round(tk)} kcal total`}</Txt>
+          <Txt style={{ fontSize: 11.5, color: colors.muted, fontFamily: font.sb }}>{`per serving · ${round(tk)} kcal · ${round(tp)}P ${round(tc)}C ${round(tf)}F total`}</Txt>
         </View>
       )}
 

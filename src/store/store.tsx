@@ -1,5 +1,7 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { AppState as RNAppState } from "react-native";
+
+import { loadState, saveState, type PersistShape } from "./persistence";
 
 import {
   BODY_RAW,
@@ -130,16 +132,6 @@ function buildInitial(profile: Profile): AppState {
   };
 }
 
-interface PersistShape {
-  profile: Profile;
-  logs: LogMap;
-  foods: Food[];
-  dishes: Dish[];
-  extraBody: BodyRecord[];
-}
-
-const STORAGE_KEY = "macrotrack:v1";
-
 interface Store {
   state: AppState;
   hydrated: boolean;
@@ -161,15 +153,17 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
   );
   const [hydrated, setHydrated] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Always holds the latest persistable slice so we can flush synchronously
+  // (e.g. when the app is backgrounded) without waiting for the debounce.
+  const latest = useRef<PersistShape | null>(null);
 
   // hydrate persisted data slice once
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const raw = await AsyncStorage.getItem(STORAGE_KEY);
-        if (active && raw) {
-          const data = JSON.parse(raw) as PersistShape;
+        const data = await loadState();
+        if (active && data) {
           setState((s) => ({
             ...s,
             profile: data.profile ?? s.profile,
@@ -180,8 +174,9 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
             measureVal: (data.profile ?? s.profile).weight,
           }));
         }
-      } catch {
-        // ignore corrupt cache — fall back to seed
+      } catch (e) {
+        // Corrupt/unreadable store — fall back to seed (already in state).
+        console.warn("[MacroTrack] load failed, using seed data:", e);
       } finally {
         if (active) setHydrated(true);
       }
@@ -191,24 +186,48 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
     };
   }, []);
 
+  // Durable write with a single retry; never swallows the final failure silently.
+  const flush = useCallback(async () => {
+    const data = latest.current;
+    if (!data) return;
+    try {
+      await saveState(data);
+    } catch (e) {
+      try {
+        await saveState(data);
+      } catch (e2) {
+        console.error("[MacroTrack] failed to persist data:", e2 || e);
+      }
+    }
+  }, []);
+
   // persist the data slice (debounced) after hydration
   useEffect(() => {
     if (!hydrated) return;
+    latest.current = {
+      profile: state.profile,
+      logs: state.logs,
+      foods: state.foods,
+      dishes: state.dishes,
+      extraBody: state.extraBody,
+    };
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      const data: PersistShape = {
-        profile: state.profile,
-        logs: state.logs,
-        foods: state.foods,
-        dishes: state.dishes,
-        extraBody: state.extraBody,
-      };
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data)).catch(() => {});
+      void flush();
     }, 350);
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [hydrated, state.profile, state.logs, state.foods, state.dishes, state.extraBody]);
+  }, [hydrated, flush, state.profile, state.logs, state.foods, state.dishes, state.extraBody]);
+
+  // Flush immediately when the app is backgrounded/closed so a kill within the
+  // debounce window can't lose the most recent edit.
+  useEffect(() => {
+    const sub = RNAppState.addEventListener("change", (next) => {
+      if (next === "background" || next === "inactive") void flush();
+    });
+    return () => sub.remove();
+  }, [flush]);
 
   const patch = useCallback((p: Partial<AppState>) => setState((s) => ({ ...s, ...p })), []);
   const open = useCallback(

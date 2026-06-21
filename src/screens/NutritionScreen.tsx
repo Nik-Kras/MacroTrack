@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useMemo } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
 import { Ring } from "@/components/Charts";
@@ -6,6 +6,7 @@ import { CalendarIcon } from "@/components/icons";
 import { MacroBar, SectionHeader, Txt, Visual } from "@/components/ui";
 import { CATMETA, MC } from "@/data/seed";
 import {
+  dateForOffset,
   dayKey,
   findDish,
   findFood,
@@ -20,16 +21,13 @@ import type { LogEntry } from "@/types";
 function dateLabels(off: number) {
   if (off === -1) return { dateLabel: "Yesterday", dateWord: "yesterday" };
   if (off === 0) return { dateLabel: "Today", dateWord: "today" };
-  const d = new Date(2026, 5, 21);
-  d.setDate(d.getDate() + off);
-  const s = d.toLocaleDateString("en", { month: "short", day: "numeric" });
+  const s = dateForOffset(off).toLocaleDateString("en", { month: "short", day: "numeric" });
   return { dateLabel: s, dateWord: s };
 }
 
 export function NutritionScreen() {
   const { state, patch, open } = useStore();
   const t = useTargets();
-  const lpTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const key = dayKey(state.dayOffset);
   const dayLogs = state.logs[key] || [];
@@ -46,14 +44,8 @@ export function NutritionScreen() {
     { label: "Fat", color: MC.f, cur: sum.f, tgt: t.f },
   ];
 
-  const onLongStart = (l: LogEntry) => {
-    lpTimer.current = setTimeout(() => {
-      patch({ ov: "grams", gTarget: "edit", editId: l.id, addGrams: l.grams, gMode: l.mode === "cooked" ? "cooked" : "raw", selFood: l.kind === "food" ? l.foodId ?? null : null });
-    }, 500);
-  };
-  const onLongEnd = () => {
-    if (lpTimer.current) { clearTimeout(lpTimer.current); lpTimer.current = null; }
-  };
+  const editLog = (l: LogEntry) =>
+    patch({ ov: "grams", gTarget: "edit", editId: l.id, addGrams: l.grams, gMode: l.mode === "cooked" ? "cooked" : "raw", selFood: l.kind === "food" ? l.foodId ?? null : null });
 
   return (
     <ScrollView
@@ -73,7 +65,7 @@ export function NutritionScreen() {
             <Txt style={{ fontSize: 18, color: colors.muted }}>‹</Txt>
           </Pressable>
           <Pressable
-            onPress={() => { const d = new Date(2026, 5, 21); d.setDate(d.getDate() + state.dayOffset); open("calendar", { calY: d.getFullYear(), calM: d.getMonth() }); }}
+            onPress={() => { const d = dateForOffset(state.dayOffset); open("calendar", { calY: d.getFullYear(), calM: d.getMonth() }); }}
             style={{ minWidth: 80, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5 }}
           >
             <Txt style={{ fontSize: 13, fontFamily: font.b }}>{dateLabel}</Txt>
@@ -147,10 +139,8 @@ export function NutritionScreen() {
             return (
               <Pressable
                 key={l.id}
-                delayLongPress={500}
-                onLongPress={() => patch({ ov: "grams", gTarget: "edit", editId: l.id, addGrams: l.grams, gMode: l.mode === "cooked" ? "cooked" : "raw", selFood: l.kind === "food" ? l.foodId ?? null : null })}
-                onPressIn={() => onLongStart(l)}
-                onPressOut={onLongEnd}
+                delayLongPress={550}
+                onLongPress={() => editLog(l)}
                 style={{ flexDirection: "row", alignItems: "center", gap: 13, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border3, borderRadius: 16, paddingVertical: 11, paddingHorizontal: 13 }}
               >
                 <Visual photo={obj?.photo} name={obj?.name} emoji={glyphForLog(l, state.foods, state.dishes)} size={44} radius={13} />

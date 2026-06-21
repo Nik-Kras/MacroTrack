@@ -27,7 +27,8 @@
         {
           "photosPermission": "MacroTrack uses your photos to attach images to dishes and logged foods."
         }
-      ]
+      ],
+      "expo-sqlite"
     ]
   }
 }

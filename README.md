@@ -16,9 +16,15 @@ No accounts, no servers — all data lives on the device.
 
 - Expo SDK 54, React Native 0.81, React 19, TypeScript (strict)
 - `react-native-svg` for charts (ring, sparkline, net-balance, weight area)
-- `@react-native-async-storage/async-storage` for local persistence
+- **`expo-sqlite`** for durable local persistence — a WAL-mode SQLite database
+  with atomic writes, a rotating backup row, corruption recovery, and one-time
+  migration from the legacy AsyncStorage blob. State is flushed on every change
+  (debounced) and immediately when the app is backgrounded.
+- **`expo-file-system`** stores dish/food photos as files on disk; only their
+  `file://` URIs are kept in the database, so the persisted blob stays tiny and
+  never hits storage limits (no base64 bloat = no silent data loss).
 - Manrope + Space Grotesk via `@expo-google-fonts`
-- `expo-image-picker` for local dish/food photos
+- `expo-image-picker` for picking local dish/food photos
 
 State is a single store (`src/store/store.tsx`) mirroring the prototype's state machine — a custom tab bar and animated bottom-sheet overlays, no navigation library.
 
@@ -39,7 +45,8 @@ src/
   types.ts            domain types
   data/seed.ts        seeded foods, dishes, body records, metadata
   lib/                nutrition math, dates, photo picker
-  store/store.tsx     app state + local persistence
+  store/store.tsx     app state (hydrate + debounced/background save)
+  store/persistence.ts durable SQLite store: load/save, backup, recovery, migration
   components/         charts, bottom sheet, icons, UI primitives
   screens/            Nutrition · Dishes · Profile · Statistics
   overlays/           Calendar · AddFood · Grams · Dish · Onboarding · Measure · FoodEditor · DishBuilder
