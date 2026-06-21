@@ -143,6 +143,8 @@ interface Store {
   bodyRecords: () => BodyRecord[];
   latestBody: () => BodyRecord;
   addMeasurement: (metric: keyof Omit<BodyRecord, "d">, val: number) => void;
+  /** Replace all persisted data (e.g. from an imported backup). */
+  restore: (data: PersistShape) => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -271,6 +273,26 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
           last.d = (last.d || 0) + 1;
           return { ...s, extraBody: [...s.extraBody, last] };
         });
+      },
+      restore: (data) => {
+        setState((s) => ({
+          ...s,
+          profile: data.profile ?? s.profile,
+          logs: data.logs ?? s.logs,
+          foods: data.foods ?? s.foods,
+          dishes: data.dishes ?? s.dishes,
+          extraBody: data.extraBody ?? s.extraBody,
+          measureVal: (data.profile ?? s.profile).weight,
+          // reset transient UI so nothing dangles from the previous data set
+          ov: null,
+          dayOffset: 0,
+          selFood: null,
+          selDish: null,
+          editId: null,
+          foodDraft: null,
+          dishDraft: null,
+          draft: null,
+        }));
       },
     };
   }, [state, hydrated, patch, open, close]);

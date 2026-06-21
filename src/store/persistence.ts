@@ -17,7 +17,7 @@ export interface PersistShape {
 }
 
 const DB_NAME = "macrotrack.db";
-const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 1;
 
 /** Legacy AsyncStorage key (pre-SQLite). Migrated once, then left untouched as a safety copy. */
 const LEGACY_KEY = "macrotrack:v1";

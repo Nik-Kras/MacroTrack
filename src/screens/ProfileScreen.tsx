@@ -1,11 +1,12 @@
 import { LinearGradient } from "expo-linear-gradient";
-import React from "react";
-import { Pressable, ScrollView, View } from "react-native";
+import React, { useState } from "react";
+import { ActivityIndicator, Alert, Pressable, ScrollView, View } from "react-native";
 
 import { Spark } from "@/components/Charts";
 import { StatsIcon } from "@/components/icons";
-import { SectionHeader, Txt } from "@/components/ui";
+import { Txt } from "@/components/ui";
 import { GOAL, GOALS_BODY, MC } from "@/data/seed";
+import { exportBackup, importBackup } from "@/lib/backup";
 import { useStore, useTargets } from "@/store/store";
 import { colors, font } from "@/theme";
 import type { BodyRecord } from "@/types";
@@ -19,11 +20,56 @@ const metricDefs: { key: keyof Omit<BodyRecord, "d">; label: string; unit: strin
 ];
 
 export function ProfileScreen() {
-  const { state, patch, open, bodyRecords } = useStore();
+  const { state, patch, open, bodyRecords, restore } = useStore();
   const t = useTargets();
   const P = state.profile;
   const acc = colors.accent;
   const recs = bodyRecords();
+  const [busy, setBusy] = useState<null | "export" | "import">(null);
+
+  const onExport = async () => {
+    if (busy) return;
+    try {
+      setBusy("export");
+      await exportBackup({
+        profile: state.profile,
+        logs: state.logs,
+        foods: state.foods,
+        dishes: state.dishes,
+        extraBody: state.extraBody,
+      });
+    } catch (e: any) {
+      Alert.alert("Export failed", e?.message || "Could not create the backup file.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const doImport = async () => {
+    try {
+      setBusy("import");
+      const data = await importBackup();
+      if (!data) return; // user cancelled the file picker
+      restore(data);
+      Alert.alert("Restore complete", "Your data has been restored from the backup.");
+    } catch (e: any) {
+      Alert.alert("Restore failed", e?.message || "Could not read that backup file.");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onImport = () => {
+    if (busy) return;
+    Alert.alert(
+      "Restore from backup?",
+      "This replaces ALL current data — profile, logs, foods, dishes and measurements — with the contents of the backup file. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Choose file", style: "destructive", onPress: doImport },
+      ],
+    );
+  };
 
   const targetMacros = [
     { label: "Protein", value: t.p, color: MC.p },
@@ -133,6 +179,38 @@ export function ProfileScreen() {
         <StatsIcon />
         <Txt style={{ fontSize: 14, fontFamily: font.b, color: colors.subtle }}>View statistics</Txt>
       </Pressable>
+
+      {/* data: backup & restore */}
+      <View style={{ marginTop: 24, marginBottom: 12 }}>
+        <Txt style={{ fontFamily: font.dB, fontSize: 17 }}>Data</Txt>
+        <Txt style={{ fontSize: 12, color: colors.muted, fontFamily: font.sb, marginTop: 3 }}>
+          Save a backup file you can keep anywhere, then restore it after reinstalling or on a new phone.
+        </Txt>
+      </View>
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <Pressable
+          onPress={onExport}
+          disabled={!!busy}
+          style={{ flex: 1, backgroundColor: acc, borderRadius: 16, padding: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, opacity: busy ? 0.6 : 1 }}
+        >
+          {busy === "export" ? (
+            <ActivityIndicator color={colors.bg} size="small" />
+          ) : (
+            <Txt style={{ fontSize: 14, fontFamily: font.xb, color: colors.bg }}>Export backup</Txt>
+          )}
+        </Pressable>
+        <Pressable
+          onPress={onImport}
+          disabled={!!busy}
+          style={{ flex: 1, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border2, borderRadius: 16, padding: 15, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, opacity: busy ? 0.6 : 1 }}
+        >
+          {busy === "import" ? (
+            <ActivityIndicator color={colors.subtle} size="small" />
+          ) : (
+            <Txt style={{ fontSize: 14, fontFamily: font.b, color: colors.subtle }}>Restore backup</Txt>
+          )}
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }
