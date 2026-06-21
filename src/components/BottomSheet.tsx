@@ -56,10 +56,18 @@ export function BottomSheet({
     }
   }, [visible, height, translate, fade]);
 
-  const Inner = scroll ? ScrollView : View;
-  const innerProps = scroll
-    ? { showsVerticalScrollIndicator: false, keyboardShouldPersistTaps: "handled" as const }
-    : {};
+  const Handle = () => (
+    <View
+      style={{
+        width: 38,
+        height: 4,
+        borderRadius: 99,
+        backgroundColor: "#333b46",
+        alignSelf: "center",
+        marginBottom: 16,
+      }}
+    />
+  );
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
@@ -78,29 +86,28 @@ export function BottomSheet({
             transform: [{ translateY: translate }],
           }}
         >
-          <Inner
-            {...innerProps}
-            contentContainerStyle={padded ? { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 30 } : undefined}
-          >
-            {handle && (
-              <View
-                style={{
-                  width: 38,
-                  height: 4,
-                  borderRadius: 99,
-                  backgroundColor: "#333b46",
-                  alignSelf: "center",
-                  marginBottom: 16,
-                }}
-              />
-            )}
-            {children}
-          </Inner>
+          {scroll ? (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={padded ? PAD : undefined}
+            >
+              {handle && <Handle />}
+              {children}
+            </ScrollView>
+          ) : (
+            <View style={padded ? PAD : undefined}>
+              {handle && <Handle />}
+              {children}
+            </View>
+          )}
         </Animated.View>
       </View>
     </Modal>
   );
 }
+
+const PAD: ViewStyle = { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 30 };
 
 const StyleSheetAbsolute: StyleProp<ViewStyle> = {
   position: "absolute",

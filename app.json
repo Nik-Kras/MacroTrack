@@ -20,6 +20,14 @@
     "androidStatusBar": {
       "barStyle": "light-content",
       "backgroundColor": "#0E1116"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MacroTrack uses your photos to attach images to dishes and logged foods."
+        }
+      ]
+    ]
   }
 }

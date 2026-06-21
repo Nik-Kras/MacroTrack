@@ -32,7 +32,7 @@ export function AddFoodSheet() {
   };
 
   return (
-    <BottomSheet visible onClose={close} handle={false} padded={false}>
+    <BottomSheet visible onClose={close} handle={false} padded={false} scroll={false}>
       {/* sticky header */}
       <View style={{ paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10 }}>
         <View style={{ width: 38, height: 4, borderRadius: 99, backgroundColor: "#333b46", alignSelf: "center", marginBottom: 14 }} />
