@@ -1,37 +1,11 @@
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Editor / IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Environment / secrets
-.env
-.env.*
-!.env.example
-
-# Node
 node_modules/
-dist/
-build/
-coverage/
-
-# Expo / React Native
 .expo/
-ios/
+dist/
+dist-verify/
+web-build/
+*.log
+.DS_Store
 android/
-
-# Temp
-*.tmp
-.cache/
+ios/
+*.orig.*
+expo-env.d.ts

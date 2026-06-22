@@ -1,144 +1,122 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
-import { Download } from 'lucide-react-native';
-import { MacroDatabase, getBodyRecords, getMacroHistory } from '../db/database';
-import { computeTargets, formatMacro } from '../lib/math';
-import { BodyRecord, MacroTotals, Profile } from '../types';
-import { colors, shadow } from '../theme';
-import { MiniChart } from '../components/MiniChart';
-import { Section } from '../components/Section';
-import { StatPill } from '../components/StatPill';
-import { exportSummaryCsv } from '../services/export';
+import React, { useMemo } from "react";
+import { Pressable, ScrollView, View } from "react-native";
 
-type Span = 'day' | 'week' | 'month' | 'all';
+import { MetricChart, NetChart } from "@/components/Charts";
+import { MacroBar, Txt } from "@/components/ui";
+import { MC } from "@/data/seed";
+import { metricDelta, metricSeries } from "@/lib/body";
+import { dayKey, entryMacros, round } from "@/lib/nutrition";
+import { useStore, useTargets } from "@/store/store";
+import { colors, font } from "@/theme";
 
-type Props = {
-  db: MacroDatabase;
-  profile: Profile;
-  latestBody: BodyRecord;
-  refreshToken: number;
-};
+const spanMeta = [
+  { k: "day", l: "Day" },
+  { k: "week", l: "Week" },
+  { k: "month", l: "Month" },
+  { k: "all", l: "All" },
+] as const;
 
-export function StatsScreen({ db, profile, latestBody, refreshToken }: Props) {
-  const [span, setSpan] = useState<Span>('week');
-  const [macroRows, setMacroRows] = useState<(MacroTotals & { log_date: string })[]>([]);
-  const [bodyRows, setBodyRows] = useState<BodyRecord[]>([]);
-  const targets = useMemo(() => computeTargets(profile, latestBody.weight_kg ?? 80), [profile, latestBody.weight_kg]);
+export function StatsScreen() {
+  const { state, patch } = useStore();
+  const t = useTargets();
+  const acc = colors.accent;
 
-  const refresh = useCallback(async () => {
-    const [macros, body] = await Promise.all([getMacroHistory(db), getBodyRecords(db)]);
-    setMacroRows(macros);
-    setBodyRows(body);
-  }, [db]);
+  const hist = useMemo(() => {
+    const arr: { off: number; kcal: number; p: number; c: number; f: number }[] = [];
+    for (let off = -13; off <= 0; off++) {
+      const dl = state.logs[dayKey(off)] || [];
+      const s = dl.reduce(
+        (a, l) => {
+          const m = entryMacros(l, state.foods, state.dishes);
+          return { kcal: a.kcal + m.kcal, p: a.p + m.p, c: a.c + m.c, f: a.f + m.f };
+        },
+        { kcal: 0, p: 0, c: 0, f: 0 },
+      );
+      arr.push({ off, kcal: round(s.kcal), p: round(s.p), c: round(s.c), f: round(s.f) });
+    }
+    return arr;
+  }, [state.logs, state.foods, state.dishes]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh, refreshToken]);
+  const nDays = state.statsSpan === "day" ? 1 : state.statsSpan === "week" ? 7 : 14;
+  const slice = hist.slice(-nDays);
+  const netData = slice.map((h) => ({ net: h.kcal - t.cal }));
+  const avgNet = Math.round(netData.reduce((a, d) => a + d.net, 0) / netData.length);
+  const spanLabel = spanMeta.find((s) => s.k === state.statsSpan)!.l.toLowerCase() + (nDays > 1 ? ` · ${nDays} days` : "");
+  const avg = (k: "p" | "c" | "f") => Math.round(slice.reduce((a, h) => a + h[k], 0) / slice.length);
 
-  const filteredMacros = useMemo(() => filterBySpan(macroRows, span), [macroRows, span]);
-  const total = useMemo(
-    () =>
-      filteredMacros.reduce(
-        (acc, row) => ({
-          kcal: acc.kcal + row.kcal,
-          protein_g: acc.protein_g + row.protein_g,
-          carbs_g: acc.carbs_g + row.carbs_g,
-          fat_g: acc.fat_g + row.fat_g
-        }),
-        { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
-      ),
-    [filteredMacros]
-  );
-  const targetForSpan = targets.kcal * Math.max(1, filteredMacros.length || (span === 'day' ? 1 : 0));
-  const delta = total.kcal - targetForSpan;
-
-  async function shareSummary() {
-    await Share.share({ message: exportSummaryCsv(filteredMacros) });
-  }
+  const weightSeries = metricSeries(state.measurements, "weight");
+  const weightChart = weightSeries.map((m) => ({ date: m.date, value: m.value }));
+  const wd = metricDelta(state.measurements, "weight");
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.hero}>
-        <Text style={styles.eyebrow}>Trends</Text>
-        <Text style={styles.title}>Statistics</Text>
-        <View style={styles.pills}>
-          <StatPill label="Intake" value={`${formatMacro(total.kcal)}`} />
-          <StatPill label={delta >= 0 ? 'Surplus' : 'Deficit'} value={`${formatMacro(delta)}`} />
-          <StatPill label="Days" value={`${filteredMacros.length}`} />
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 130 }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginTop: 6, marginBottom: 18 }}>
+        <Pressable
+          onPress={() => patch({ screen: "nutrition" })}
+          style={{ width: 36, height: 36, borderRadius: 99, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border2, alignItems: "center", justifyContent: "center" }}
+        >
+          <Txt style={{ fontSize: 18, color: colors.subtle }}>‹</Txt>
+        </Pressable>
+        <Txt style={{ fontFamily: font.dB, fontSize: 22 }}>Statistics</Txt>
+      </View>
+
+      {/* span tabs */}
+      <View style={{ flexDirection: "row", gap: 6, backgroundColor: "#13171D", borderWidth: 1, borderColor: colors.border, borderRadius: 99, padding: 4, marginBottom: 18 }}>
+        {spanMeta.map((s) => {
+          const on = state.statsSpan === s.k;
+          return (
+            <Pressable
+              key={s.k}
+              onPress={() => patch({ statsSpan: s.k })}
+              style={{ flex: 1, paddingVertical: 8, borderRadius: 99, alignItems: "center", backgroundColor: on ? acc : "transparent" }}
+            >
+              <Txt style={{ fontSize: 12.5, fontFamily: font.b, color: on ? colors.bg : colors.muted }}>{s.l}</Txt>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {/* energy balance */}
+      <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 22, padding: 18, marginBottom: 14 }}>
+        <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4 }}>
+          <Txt style={{ fontSize: 13, fontFamily: font.b, color: colors.muted }}>Energy balance</Txt>
+          <Txt style={{ fontSize: 12, fontFamily: font.b, color: avgNet <= 0 ? acc : colors.over }}>
+            {`${avgNet <= 0 ? avgNet : "+" + avgNet} kcal / day`}
+          </Txt>
+        </View>
+        <Txt style={{ fontSize: 11.5, color: colors.dim, fontFamily: font.sb, marginBottom: 14 }}>{`Intake vs target · ${spanLabel}`}</Txt>
+        <NetChart data={netData} acc={acc} />
+      </View>
+
+      {/* macro averages */}
+      <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 22, padding: 18, marginBottom: 14 }}>
+        <Txt style={{ fontSize: 13, fontFamily: font.b, color: colors.muted, marginBottom: 14 }}>Average macros vs target</Txt>
+        <View style={{ gap: 13 }}>
+          <MacroBar label="Protein" valText={`${avg("p")} / ${t.p} g avg`} cur={avg("p")} tgt={t.p} color={MC.p} />
+          <MacroBar label="Carbs" valText={`${avg("c")} / ${t.c} g avg`} cur={avg("c")} tgt={t.c} color={MC.c} />
+          <MacroBar label="Fat" valText={`${avg("f")} / ${t.f} g avg`} cur={avg("f")} tgt={t.f} color={MC.f} />
         </View>
       </View>
 
-      <View style={styles.segment}>
-        {(['day', 'week', 'month', 'all'] as Span[]).map((item) => (
-          <Pressable key={item} style={[styles.segmentButton, span === item && styles.segmentActive]} onPress={() => setSpan(item)}>
-            <Text style={[styles.segmentText, span === item && styles.segmentTextActive]}>{item}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <Section title="Macro trend">
-        <View style={styles.card}>
-          <MiniChart values={filteredMacros.map((row) => row.kcal)} color={colors.green} emptyLabel="No intake in this span" />
-          <View style={styles.legend}>
-            <Text style={styles.legendText}>{formatMacro(total.protein_g)} g protein</Text>
-            <Text style={styles.legendText}>{formatMacro(total.carbs_g)} g carbs</Text>
-            <Text style={styles.legendText}>{formatMacro(total.fat_g)} g fat</Text>
+      {/* weight trend */}
+      <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 22, padding: 18 }}>
+        <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
+          <Txt style={{ fontSize: 13, fontFamily: font.b, color: colors.muted }}>Weight trend</Txt>
+          {weightSeries.length >= 2 && (
+            <Txt style={{ fontSize: 12, fontFamily: font.b, color: acc }}>{`${wd > 0 ? "+" : ""}${wd} kg`}</Txt>
+          )}
+        </View>
+        {weightSeries.length > 0 ? (
+          <MetricChart series={weightChart} acc={acc} unit="kg" goal={state.profile.goalWeight} />
+        ) : (
+          <View style={{ height: 120, alignItems: "center", justifyContent: "center" }}>
+            <Txt style={{ fontSize: 13, color: colors.muted, fontFamily: font.b }}>Log your weight to see the trend</Txt>
           </View>
-        </View>
-      </Section>
-
-      <Section title="Body trend">
-        <View style={styles.card}>
-          <MiniChart values={bodyRows.map((record) => record.weight_kg ?? NaN)} color={colors.coral} emptyLabel="No body records yet" />
-        </View>
-      </Section>
-
-      <Pressable style={styles.primaryButton} onPress={shareSummary}>
-        <Download size={18} color={colors.card} />
-        <Text style={styles.primaryText}>Export summary CSV</Text>
-      </Pressable>
+        )}
+      </View>
     </ScrollView>
   );
 }
-
-function filterBySpan<T extends { log_date: string }>(rows: T[], span: Span) {
-  if (span === 'all') return rows;
-  const days = span === 'day' ? 1 : span === 'week' ? 7 : 31;
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days + 1);
-  const key = cutoff.toISOString().slice(0, 10);
-  return rows.filter((row) => row.log_date >= key);
-}
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.paper },
-  content: { padding: 18, paddingBottom: 36 },
-  hero: { paddingTop: 8, paddingBottom: 18, gap: 10 },
-  eyebrow: { color: colors.green, fontSize: 12, fontWeight: '900', textTransform: 'uppercase' },
-  title: { color: colors.ink, fontSize: 34, fontWeight: '900' },
-  pills: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  segment: {
-    flexDirection: 'row',
-    padding: 4,
-    borderRadius: 8,
-    backgroundColor: '#E7DFD0',
-    marginBottom: 22
-  },
-  segmentButton: { flex: 1, minHeight: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
-  segmentActive: { backgroundColor: colors.card },
-  segmentText: { color: colors.muted, fontWeight: '900', textTransform: 'capitalize' },
-  segmentTextActive: { color: colors.ink },
-  card: { backgroundColor: colors.card, borderRadius: 8, padding: 16, gap: 12, ...shadow },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  legendText: { color: colors.muted, fontWeight: '800' },
-  primaryButton: {
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 8,
-    backgroundColor: colors.green
-  },
-  primaryText: { color: colors.card, fontWeight: '900' }
-});

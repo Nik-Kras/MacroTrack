@@ -1,88 +1,88 @@
-export type GoalType = 'fat_loss' | 'maintenance' | 'muscle_gain';
-export type Sex = 'male' | 'female';
-export type ActivityLevel =
-  | 'sedentary'
-  | 'lightly_active'
-  | 'moderately_active'
-  | 'very_active'
-  | 'extra_active';
+export type CategoryKey = "protein" | "carbs" | "fat" | "low-cal" | "high-cal";
+export type Sex = "male" | "female";
+export type ActivityKey = "sedentary" | "light" | "moderate" | "very" | "extra";
+export type GoalKey = "fatloss" | "maintain" | "gain";
+export type CookMode = "raw" | "cooked" | "na";
 
-export type MacroTotals = {
+export interface Food {
+  id: number | string;
+  name: string;
   kcal: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-};
+  p: number;
+  c: number;
+  f: number;
+  cats: CategoryKey[];
+  cookable?: boolean;
+  /** yield factor: cooked grams per uncooked gram */
+  yld?: number;
+  emoji?: string;
+  photo?: string;
+  custom?: boolean;
+}
 
-export type Food = MacroTotals & {
-  id: number;
-  kind: 'PRODUCT' | 'DISH';
-  is_seed: number;
-  category: string | null;
+export interface Dish {
+  id: string;
   name: string;
-  name_ua: string | null;
-  aliases: string | null;
-  aliases_ua: string | null;
-  low_kcal: number;
-  high_kcal: number;
-  low_fat: number;
-  high_fat: number;
-  low_protein: number;
-  high_protein: number;
-  low_carbs: number;
-  high_carbs: number;
-};
-
-export type Profile = {
-  id: 1;
-  name: string | null;
-  sex: Sex;
-  birth_date: string;
-  height_cm: number;
-  activity_level: ActivityLevel;
-  goal_type: GoalType;
-  desired_weight_kg: number;
-  desired_bicep_cm: number | null;
-  desired_chest_cm: number | null;
-  desired_waist_cm: number | null;
-  desired_leg_both_cm: number | null;
-  desired_single_leg_cm: number | null;
-  calorie_adjustment_pct: number;
-  protein_g_per_kg: number;
-  fat_g_per_kg: number;
-};
-
-export type BodyRecord = {
-  id: number;
-  recorded_at: string;
-  weight_kg: number | null;
-  bicep_cm: number | null;
-  chest_cm: number | null;
-  waist_cm: number | null;
-  leg_both_cm: number | null;
-  single_leg_cm: number | null;
-};
-
-export type LogEntry = MacroTotals & {
-  id: number;
-  log_date: string;
-  source_type: 'FOOD' | 'DISH';
-  food_id: number | null;
-  custom_dish_id: number | null;
-  grams: number | null;
-  servings_used: number | null;
-  photo_uri: string | null;
-  name: string;
-};
-
-export type CustomDish = {
-  id: number;
-  name: string;
-  photo_uri: string | null;
   servings: number;
-  notes: string | null;
-  total_kcal: number;
-  total_protein_g: number;
-  total_carbs_g: number;
-  total_fat_g: number;
-};
+  glyph?: string;
+  emoji?: string;
+  photo?: string;
+  /** [foodId, rawGrams] pairs */
+  ing: [number | string, number][];
+  /**
+   * Total weight of the finished, cooked dish (grams), as measured by the user.
+   * Used to log a portion by cooked weight. When unset, a value is predicted
+   * from each ingredient's yield (Σ rawGrams × yield).
+   */
+  cookedWeight?: number;
+  custom?: boolean;
+}
+
+export interface LogEntry {
+  id: string;
+  kind: "food" | "dish";
+  foodId?: number | string;
+  dishId?: string;
+  name: string;
+  grams: number;
+  mode: CookMode;
+  kcal: number;
+  p: number;
+  c: number;
+  f: number;
+  cat: string;
+}
+
+export type MetricKey = "weight" | "waist" | "bicep" | "chest" | "leg";
+
+export interface Measurement {
+  id: string;
+  metric: MetricKey;
+  value: number;
+  /** ISO calendar date (YYYY-MM-DD) the measurement was logged for */
+  date: string;
+}
+
+export interface Profile {
+  name: string;
+  sex: Sex;
+  age: number;
+  height: number;
+  weight: number;
+  activity: ActivityKey;
+  goal: GoalKey;
+  goalWeight: number;
+  /** local file:// URI of the profile photo (optional) */
+  photo?: string;
+}
+
+export interface Targets {
+  bmr: number;
+  tdee: number;
+  cal: number;
+  p: number;
+  c: number;
+  f: number;
+}
+
+export type LogMap = Record<string, LogEntry[]>;

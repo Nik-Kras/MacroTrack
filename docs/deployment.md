@@ -2,6 +2,8 @@
 
 This guide explains how an agent or developer should launch MacroTrack in an Android emulator on macOS, and how a user should open and navigate the running app.
 
+> **Note:** The app code was reset to be rebuilt from the updated `PRD.md`. The script names (`pnpm emulator`, `scripts/dev/...`) and the **Navigating MacroTrack** walkthrough below describe the *intended* shape and will be **regenerated/validated during the rebuild**. The rebuilt Nutrition tab is expected to add: barcode-scan entry in search, **Recent / Frequent / My Foods** search tabs, **saved meals** and **copy previous day**, a calories-**remaining** hero with laconic macro bars, and **streaks/reminders**; Profile adds optional **progress photos**.
+
 ## Current App Shape
 
 MacroTrack is an Expo React Native app. The emulator workflow is handled by:

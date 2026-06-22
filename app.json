@@ -2,34 +2,42 @@
   "expo": {
     "name": "MacroTrack",
     "slug": "macrotrack",
-    "scheme": "macrotrack",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
-    "splash": {
-      "backgroundColor": "#F7F3EA"
-    },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0E1116",
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.nikkras.macrotrack",
-      "infoPlist": {
-        "NSPhotoLibraryUsageDescription": "MacroTrack stores selected dish and log photos locally on this device.",
-        "NSCameraUsageDescription": "MacroTrack can attach locally stored photos to dishes and log entries."
-      }
+      "bundleIdentifier": "com.nikkras.macrotrack"
     },
     "android": {
       "package": "com.nikkras.macrotrack",
+      "adaptiveIcon": {
+        "backgroundColor": "#0E1116"
+      },
       "permissions": [
-        "CAMERA",
-        "READ_MEDIA_IMAGES"
+        "android.permission.RECORD_AUDIO"
       ]
     },
+    "androidStatusBar": {
+      "barStyle": "light-content",
+      "backgroundColor": "#0E1116"
+    },
     "plugins": [
-      "expo-sqlite",
-      "expo-image-picker"
-    ]
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MacroTrack uses your photos to attach images to dishes and logged foods."
+        }
+      ],
+      "expo-sqlite"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "97e149cf-378a-4190-9b37-7ed227d981d9"
+      }
+    },
+    "owner": "nikitakras"
   }
 }

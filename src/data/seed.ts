@@ -1,153 +1,116 @@
-import { Food, Profile } from '../types';
-import { defaultCoefficients } from '../lib/math';
+import { colors } from "@/theme";
+import type {
+  ActivityKey,
+  CategoryKey,
+  Dish,
+  Food,
+  GoalKey,
+  Profile,
+  Sex,
+} from "@/types";
 
-export const seedFoods: Omit<Food, 'id'>[] = [
-  {
-    kind: 'PRODUCT',
-    is_seed: 1,
-    category: 'Lean protein',
-    name: 'Chicken breast',
-    name_ua: 'Куряча грудка',
-    aliases: 'chicken;breast;lean meat',
-    aliases_ua: 'курка;грудка',
-    kcal: 165,
-    protein_g: 31,
-    fat_g: 3.6,
-    carbs_g: 0,
-    low_kcal: 1,
-    high_kcal: 0,
-    low_fat: 1,
-    high_fat: 0,
-    low_protein: 0,
-    high_protein: 1,
-    low_carbs: 1,
-    high_carbs: 0
-  },
-  {
-    kind: 'PRODUCT',
-    is_seed: 1,
-    category: 'Carb source',
-    name: 'Cooked white rice',
-    name_ua: 'Варений білий рис',
-    aliases: 'rice;white rice',
-    aliases_ua: 'рис',
-    kcal: 130,
-    protein_g: 2.7,
-    fat_g: 0.3,
-    carbs_g: 28.2,
-    low_kcal: 0,
-    high_kcal: 0,
-    low_fat: 1,
-    high_fat: 0,
-    low_protein: 1,
-    high_protein: 0,
-    low_carbs: 0,
-    high_carbs: 1
-  },
-  {
-    kind: 'PRODUCT',
-    is_seed: 1,
-    category: 'Protein',
-    name: 'Greek yogurt 2%',
-    name_ua: 'Грецький йогурт 2%',
-    aliases: 'yogurt;greek yoghurt',
-    aliases_ua: 'йогурт',
-    kcal: 73,
-    protein_g: 9.9,
-    fat_g: 2,
-    carbs_g: 3.6,
-    low_kcal: 1,
-    high_kcal: 0,
-    low_fat: 1,
-    high_fat: 0,
-    low_protein: 0,
-    high_protein: 1,
-    low_carbs: 1,
-    high_carbs: 0
-  },
-  {
-    kind: 'PRODUCT',
-    is_seed: 1,
-    category: 'Fat source',
-    name: 'Avocado',
-    name_ua: 'Авокадо',
-    aliases: 'avocado',
-    aliases_ua: 'авокадо',
-    kcal: 160,
-    protein_g: 2,
-    fat_g: 14.7,
-    carbs_g: 8.5,
-    low_kcal: 0,
-    high_kcal: 0,
-    low_fat: 0,
-    high_fat: 1,
-    low_protein: 1,
-    high_protein: 0,
-    low_carbs: 0,
-    high_carbs: 0
-  },
-  {
-    kind: 'PRODUCT',
-    is_seed: 1,
-    category: 'High calorie',
-    name: 'Peanut butter',
-    name_ua: 'Арахісова паста',
-    aliases: 'peanut;nut butter',
-    aliases_ua: 'арахіс;паста',
-    kcal: 588,
-    protein_g: 25,
-    fat_g: 50,
-    carbs_g: 20,
-    low_kcal: 0,
-    high_kcal: 1,
-    low_fat: 0,
-    high_fat: 1,
-    low_protein: 0,
-    high_protein: 1,
-    low_carbs: 0,
-    high_carbs: 0
-  },
-  {
-    kind: 'DISH',
-    is_seed: 1,
-    category: 'Default dish',
-    name: 'Protein oats',
-    name_ua: 'Протеїнова вівсянка',
-    aliases: 'oats;porridge',
-    aliases_ua: 'вівсянка',
-    kcal: 178,
-    protein_g: 13,
-    fat_g: 4.5,
-    carbs_g: 20,
-    low_kcal: 0,
-    high_kcal: 0,
-    low_fat: 0,
-    high_fat: 0,
-    low_protein: 0,
-    high_protein: 1,
-    low_carbs: 0,
-    high_carbs: 1
-  }
+// Macro accent colours (protein / carbs / fat).
+export const MC = { p: colors.protein, c: colors.carbs, f: colors.fat } as const;
+
+// Activity multipliers (Mifflin–St Jeor → TDEE).
+export const ACT: Record<ActivityKey, number> = {
+  sedentary: 1.2,
+  light: 1.375,
+  moderate: 1.55,
+  very: 1.725,
+  extra: 1.9,
+};
+
+export const ACTMETA: { key: ActivityKey; label: string; desc: string }[] = [
+  { key: "sedentary", label: "Sedentary", desc: "Little or no exercise" },
+  { key: "light", label: "Lightly active", desc: "1–3 days / week" },
+  { key: "moderate", label: "Moderately active", desc: "3–5 days / week" },
+  { key: "very", label: "Very active", desc: "6–7 days / week" },
+  { key: "extra", label: "Extra active", desc: "Hard daily training" },
 ];
 
-const canonicalBirthDate = '1996-06-02';
-const fatLoss = defaultCoefficients.fat_loss;
+export const GOAL: Record<GoalKey, { adj: number; pkg: number; label: string }> = {
+  fatloss: { adj: -0.2, pkg: 2.0, label: "Fat loss" },
+  maintain: { adj: 0, pkg: 1.4, label: "Maintenance" },
+  gain: { adj: 0.15, pkg: 1.9, label: "Muscle gain" },
+};
 
-export const seedProfile: Profile = {
-  id: 1,
-  name: 'Nik',
-  sex: 'male',
-  birth_date: canonicalBirthDate,
-  height_cm: 180,
-  activity_level: 'moderately_active',
-  goal_type: 'fat_loss',
-  desired_weight_kg: 75,
-  desired_bicep_cm: 38,
-  desired_chest_cm: 104,
-  desired_waist_cm: 78,
-  desired_leg_both_cm: 112,
-  desired_single_leg_cm: 58,
-  calorie_adjustment_pct: fatLoss.calorieAdjustmentPct,
-  protein_g_per_kg: fatLoss.proteinGPerKg,
-  fat_g_per_kg: fatLoss.fatGPerKg
+export const CATMETA: { key: CategoryKey; label: string; color: string }[] = [
+  { key: "protein", label: "High protein", color: MC.p },
+  { key: "carbs", label: "Good carbs", color: MC.c },
+  { key: "fat", label: "Healthy fats", color: MC.f },
+  { key: "low-cal", label: "Low calorie", color: colors.lowCal },
+  { key: "high-cal", label: "High calorie", color: colors.highCal },
+];
+
+export const FOODS: Food[] = [
+  { id: 1, name: "Chicken breast", kcal: 120, p: 23, c: 0, f: 2.6, cats: ["protein", "low-cal"], cookable: true, yld: 0.85 },
+  { id: 2, name: "Salmon fillet", kcal: 208, p: 20, c: 0, f: 13, cats: ["protein", "fat"], cookable: true, yld: 0.82 },
+  { id: 3, name: "Egg", kcal: 143, p: 13, c: 0.7, f: 9.5, cats: ["protein", "fat"] },
+  { id: 4, name: "Greek yogurt 0%", kcal: 59, p: 10, c: 3.6, f: 0.4, cats: ["protein", "low-cal"] },
+  { id: 5, name: "Tofu", kcal: 76, p: 8, c: 1.9, f: 4.8, cats: ["protein", "low-cal"], cookable: true, yld: 0.9 },
+  { id: 6, name: "Lentils", kcal: 352, p: 24.6, c: 63.4, f: 1, cats: ["protein", "carbs"], cookable: true, yld: 2.4 },
+  { id: 7, name: "Black beans", kcal: 341, p: 21, c: 62, f: 1.4, cats: ["protein", "carbs"], cookable: true, yld: 2.4 },
+  { id: 8, name: "Whey protein", kcal: 380, p: 80, c: 8, f: 6, cats: ["protein", "high-cal"] },
+  { id: 9, name: "Tuna, canned", kcal: 85, p: 19.4, c: 0, f: 1, cats: ["protein", "low-cal"] },
+  { id: 10, name: "Lean beef", kcal: 187, p: 21, c: 0, f: 11, cats: ["protein", "high-cal"], cookable: true, yld: 0.75 },
+  { id: 11, name: "Cottage cheese", kcal: 86, p: 11, c: 4.6, f: 2.3, cats: ["protein", "low-cal"] },
+  { id: 12, name: "Oats", kcal: 389, p: 17, c: 66, f: 7, cats: ["carbs", "high-cal"], cookable: true, yld: 2.5 },
+  { id: 13, name: "White rice", kcal: 365, p: 7, c: 80, f: 0.6, cats: ["carbs", "high-cal"], cookable: true, yld: 2.5 },
+  { id: 14, name: "Brown rice", kcal: 370, p: 7.5, c: 76, f: 2.9, cats: ["carbs", "high-cal"], cookable: true, yld: 2.6 },
+  { id: 15, name: "Sweet potato", kcal: 86, p: 1.6, c: 20, f: 0.1, cats: ["carbs", "low-cal"], cookable: true, yld: 0.9 },
+  { id: 16, name: "Banana", kcal: 89, p: 1.1, c: 23, f: 0.3, cats: ["carbs", "low-cal"] },
+  { id: 17, name: "Quinoa", kcal: 368, p: 14, c: 64, f: 6, cats: ["carbs", "high-cal"], cookable: true, yld: 2.9 },
+  { id: 18, name: "Whole wheat bread", kcal: 254, p: 12.3, c: 43.1, f: 3.6, cats: ["carbs"] },
+  { id: 19, name: "Pasta", kcal: 371, p: 13, c: 75, f: 1.5, cats: ["carbs", "high-cal"], cookable: true, yld: 2.3 },
+  { id: 20, name: "Apple", kcal: 52, p: 0.3, c: 14, f: 0.2, cats: ["carbs", "low-cal"] },
+  { id: 21, name: "Avocado", kcal: 160, p: 2, c: 8.5, f: 14.7, cats: ["fat", "high-cal"] },
+  { id: 22, name: "Olive oil", kcal: 884, p: 0, c: 0, f: 100, cats: ["fat", "high-cal"] },
+  { id: 23, name: "Almonds", kcal: 579, p: 21, c: 22, f: 49, cats: ["fat", "high-cal"] },
+  { id: 24, name: "Peanut butter", kcal: 588, p: 25, c: 20, f: 50, cats: ["fat", "high-cal"] },
+  { id: 25, name: "Walnuts", kcal: 654, p: 15, c: 14, f: 65, cats: ["fat", "high-cal"] },
+  { id: 26, name: "Chia seeds", kcal: 486, p: 16.5, c: 42, f: 30.7, cats: ["fat"] },
+  { id: 27, name: "Broccoli", kcal: 34, p: 2.8, c: 6.6, f: 0.4, cats: ["low-cal"], cookable: true, yld: 0.9 },
+  { id: 28, name: "Spinach", kcal: 23, p: 2.9, c: 3.6, f: 0.4, cats: ["low-cal"], cookable: true, yld: 0.35 },
+  { id: 29, name: "Cheddar cheese", kcal: 403, p: 22.9, c: 3.4, f: 33.3, cats: ["fat", "protein", "high-cal"] },
+  { id: 30, name: "Milk 2%", kcal: 50, p: 3.4, c: 4.9, f: 2, cats: ["protein"] },
+];
+
+export const DISHRAW: Dish[] = [
+  { id: "d1", name: "Chicken & Rice Bowl", servings: 2, glyph: "🍗", ing: [[1, 350], [13, 100], [27, 200], [22, 12]] },
+  { id: "d2", name: "Salmon Poke", servings: 2, glyph: "🐟", ing: [[2, 280], [14, 90], [21, 100], [28, 60]] },
+  { id: "d3", name: "Protein Oats", servings: 1, glyph: "🥣", ing: [[12, 80], [8, 30], [16, 100], [24, 15]] },
+  { id: "d4", name: "Beef Burrito Bowl", servings: 2, glyph: "🌯", ing: [[10, 350], [7, 80], [13, 90], [21, 80]] },
+  { id: "d5", name: "Yogurt Parfait", servings: 1, glyph: "🥛", ing: [[4, 200], [12, 30], [23, 20], [16, 80]] },
+  { id: "d6", name: "Tofu Stir-fry", servings: 2, glyph: "🥦", ing: [[5, 350], [14, 80], [27, 200], [22, 12]] },
+];
+
+export const GLYPHMAP: Record<number, string> = {
+  1: "🍗", 2: "🐟", 3: "🥚", 4: "🥛", 5: "🧈", 6: "🫘", 7: "🫘", 8: "💪", 9: "🐟", 10: "🥩",
+  11: "🧀", 12: "🥣", 13: "🍚", 14: "🍚", 15: "🍠", 16: "🍌", 17: "🌾", 18: "🍞", 19: "🍝", 20: "🍎",
+  21: "🥑", 22: "🫒", 23: "🌰", 24: "🥜", 25: "🌰", 26: "🌱", 27: "🥦", 28: "🥬", 29: "🧀", 30: "🥛",
+};
+
+export const EMOJIS = [
+  "🍗", "🥩", "🐟", "🍤", "🥚", "🥛", "🧀", "🧈", "🫘", "🍚", "🍞", "🍝", "🥔", "🍠", "🌽", "🥦",
+  "🥬", "🥗", "🥑", "🍌", "🍎", "🫐", "🍓", "🥜", "🌰", "🫒", "🍪", "🍫", "☕", "🥣", "🍲", "🌯",
+];
+
+// "Today" anchor for relative day math — the real current date (local midnight).
+export const BASE_DATE = (() => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+})();
+
+// Neutral starting profile — no personal data until the user fills it in.
+export const DEFAULT_PROFILE: Profile = {
+  name: "",
+  sex: "male" as Sex,
+  age: 25,
+  height: 175,
+  weight: 70,
+  activity: "moderate",
+  goal: "maintain",
+  goalWeight: 70,
 };
