@@ -68,7 +68,7 @@ export async function pickPhoto(): Promise<string | null> {
  * AsyncStorage build) into files. Returns a new object; never mutates the input.
  */
 export async function migrateShapePhotos<
-  T extends { foods?: Food[]; dishes?: Dish[] },
+  T extends { foods?: Food[]; dishes?: Dish[]; profile?: { photo?: string } },
 >(shape: T): Promise<T> {
   const convert = async (photo?: string) =>
     photo && photo.startsWith("data:") ? await persistPhotoUri(photo) : photo;
@@ -83,6 +83,9 @@ export async function migrateShapePhotos<
         shape.dishes.map(async (d) => ({ ...d, photo: await convert(d.photo) })),
       )
     : shape.dishes;
+  const profile = shape.profile
+    ? { ...shape.profile, photo: await convert(shape.profile.photo) }
+    : shape.profile;
 
-  return { ...shape, foods, dishes };
+  return { ...shape, foods, dishes, profile };
 }

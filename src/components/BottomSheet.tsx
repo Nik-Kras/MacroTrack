@@ -1,8 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
+  Keyboard,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleProp,
@@ -12,6 +14,26 @@ import {
 } from "react-native";
 
 import { colors } from "@/theme";
+
+/**
+ * Track the on-screen keyboard height. Inside a React Native <Modal> the Android
+ * window-resize (`adjustResize`) does not apply, so we reserve the keyboard's
+ * space manually — the reliable, dependency-free approach for modal sheets.
+ */
+function useKeyboardHeight() {
+  const [kb, setKb] = useState(0);
+  useEffect(() => {
+    const showEvt = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvt = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvt, (e) => setKb(e?.endCoordinates?.height ?? 0));
+    const hide = Keyboard.addListener(hideEvt, () => setKb(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return kb;
+}
 
 /**
  * Bottom sheet matching the prototype overlays: dimmed backdrop + sheet that
@@ -25,6 +47,7 @@ export function BottomSheet({
   maxHeightPct = 0.92,
   handle = true,
   padded = true,
+  fill = false,
   zHint,
 }: {
   visible: boolean;
@@ -34,11 +57,16 @@ export function BottomSheet({
   maxHeightPct?: number;
   handle?: boolean;
   padded?: boolean;
+  /** Make the sheet a fixed-height flex column (for search lists that fill the space). */
+  fill?: boolean;
   zHint?: number;
 }) {
   const { height } = useWindowDimensions();
+  const kb = useKeyboardHeight();
   const translate = useRef(new Animated.Value(height)).current;
   const fade = useRef(new Animated.Value(0)).current;
+  // Cap the sheet to the space ABOVE the keyboard and lift it by the keyboard height.
+  const sheetMax = maxHeightPct * (height - kb);
 
   useEffect(() => {
     if (visible) {
@@ -77,7 +105,11 @@ export function BottomSheet({
         </Animated.View>
         <Animated.View
           style={{
-            maxHeight: `${maxHeightPct * 100}%`,
+            // `fill` sheets take a fixed height so an inner flex:1 list fills the
+            // space deterministically; others size to content up to the cap.
+            ...(fill ? { height: sheetMax } : { maxHeight: sheetMax }),
+            marginBottom: kb,
+            overflow: "hidden",
             backgroundColor: colors.sheet,
             borderTopLeftRadius: 26,
             borderTopRightRadius: 26,
@@ -96,7 +128,7 @@ export function BottomSheet({
               {children}
             </ScrollView>
           ) : (
-            <View style={padded ? PAD : undefined}>
+            <View style={[fill ? { flex: 1 } : null, padded ? PAD : null]}>
               {handle && <Handle />}
               {children}
             </View>

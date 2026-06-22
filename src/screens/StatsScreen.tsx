@@ -1,10 +1,11 @@
 import React, { useMemo } from "react";
 import { Pressable, ScrollView, View } from "react-native";
 
-import { NetChart, WeightChart } from "@/components/Charts";
+import { MetricChart, NetChart } from "@/components/Charts";
 import { MacroBar, Txt } from "@/components/ui";
 import { MC } from "@/data/seed";
-import { dayKey, round } from "@/lib/nutrition";
+import { metricDelta, metricSeries } from "@/lib/body";
+import { dayKey, entryMacros, round } from "@/lib/nutrition";
 import { useStore, useTargets } from "@/store/store";
 import { colors, font } from "@/theme";
 
@@ -16,7 +17,7 @@ const spanMeta = [
 ] as const;
 
 export function StatsScreen() {
-  const { state, patch, bodyRecords } = useStore();
+  const { state, patch } = useStore();
   const t = useTargets();
   const acc = colors.accent;
 
@@ -24,11 +25,17 @@ export function StatsScreen() {
     const arr: { off: number; kcal: number; p: number; c: number; f: number }[] = [];
     for (let off = -13; off <= 0; off++) {
       const dl = state.logs[dayKey(off)] || [];
-      const s = dl.reduce((a, l) => ({ kcal: a.kcal + l.kcal, p: a.p + l.p, c: a.c + l.c, f: a.f + l.f }), { kcal: 0, p: 0, c: 0, f: 0 });
+      const s = dl.reduce(
+        (a, l) => {
+          const m = entryMacros(l, state.foods, state.dishes);
+          return { kcal: a.kcal + m.kcal, p: a.p + m.p, c: a.c + m.c, f: a.f + m.f };
+        },
+        { kcal: 0, p: 0, c: 0, f: 0 },
+      );
       arr.push({ off, kcal: round(s.kcal), p: round(s.p), c: round(s.c), f: round(s.f) });
     }
     return arr;
-  }, [state.logs]);
+  }, [state.logs, state.foods, state.dishes]);
 
   const nDays = state.statsSpan === "day" ? 1 : state.statsSpan === "week" ? 7 : 14;
   const slice = hist.slice(-nDays);
@@ -37,8 +44,9 @@ export function StatsScreen() {
   const spanLabel = spanMeta.find((s) => s.k === state.statsSpan)!.l.toLowerCase() + (nDays > 1 ? ` · ${nDays} days` : "");
   const avg = (k: "p" | "c" | "f") => Math.round(slice.reduce((a, h) => a + h[k], 0) / slice.length);
 
-  const recs = bodyRecords();
-  const wd = +(recs[recs.length - 1].weight - recs[0].weight).toFixed(1);
+  const weightSeries = metricSeries(state.measurements, "weight");
+  const weightChart = weightSeries.map((m) => ({ date: m.date, value: m.value }));
+  const wd = metricDelta(state.measurements, "weight");
 
   return (
     <ScrollView
@@ -97,9 +105,17 @@ export function StatsScreen() {
       <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 22, padding: 18 }}>
         <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 14 }}>
           <Txt style={{ fontSize: 13, fontFamily: font.b, color: colors.muted }}>Weight trend</Txt>
-          <Txt style={{ fontSize: 12, fontFamily: font.b, color: acc }}>{`${wd > 0 ? "+" : ""}${wd} kg`}</Txt>
+          {weightSeries.length >= 2 && (
+            <Txt style={{ fontSize: 12, fontFamily: font.b, color: acc }}>{`${wd > 0 ? "+" : ""}${wd} kg`}</Txt>
+          )}
         </View>
-        <WeightChart records={recs} acc={acc} />
+        {weightSeries.length > 0 ? (
+          <MetricChart series={weightChart} acc={acc} unit="kg" goal={state.profile.goalWeight} />
+        ) : (
+          <View style={{ height: 120, alignItems: "center", justifyContent: "center" }}>
+            <Txt style={{ fontSize: 13, color: colors.muted, fontFamily: font.b }}>Log your weight to see the trend</Txt>
+          </View>
+        )}
       </View>
     </ScrollView>
   );

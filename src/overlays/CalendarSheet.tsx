@@ -3,7 +3,7 @@ import { Pressable, View } from "react-native";
 
 import { BottomSheet } from "@/components/BottomSheet";
 import { RoundBtn, Txt } from "@/components/ui";
-import { dateForOffset, dayKey, fmtKey, offsetForKey } from "@/lib/nutrition";
+import { dateForOffset, dayKey, entryMacros, fmtKey, offsetForKey } from "@/lib/nutrition";
 import { useStore, useTargets } from "@/store/store";
 import { colors, font } from "@/theme";
 
@@ -17,7 +17,7 @@ export function CalendarSheet() {
   const netForKey = (key: string) => {
     const logs = state.logs[key];
     if (logs && logs.length) {
-      const k = logs.reduce((a, l) => a + l.kcal, 0);
+      const k = logs.reduce((a, l) => a + entryMacros(l, state.foods, state.dishes).kcal, 0);
       return { has: true, kcal: Math.round(k), net: Math.round(k - t.cal) };
     }
     return { has: false, kcal: 0, net: 0 };

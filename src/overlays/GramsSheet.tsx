@@ -17,6 +17,7 @@ import {
   yldOf,
 } from "@/lib/nutrition";
 import { useStore } from "@/store/store";
+import { useSubmitGuard } from "@/lib/useSubmitGuard";
 import { colors, font } from "@/theme";
 import type { Food } from "@/types";
 
@@ -24,6 +25,7 @@ const PRESETS = [50, 100, 150, 200, 250];
 
 export function GramsSheet() {
   const { state, patch, close } = useStore();
+  const guard = useSubmitGuard();
   const acc = colors.accent;
   const dateKey = dayKey(state.dayOffset);
   const { dateWord } = (() => {
@@ -109,6 +111,8 @@ export function GramsSheet() {
     : [];
 
   const confirmLabel = gt === "edit" ? "Save" : gt === "ingredient" ? "Set amount" : `Add to ${dateWord}`;
+  // Block submitting an empty / zero weight (would create a 0 g, 0-kcal entry).
+  const canConfirm = Math.round(state.addGrams || 0) > 0;
 
   const numBox = (border: string): any => ({ flex: 1, backgroundColor: colors.inset, borderWidth: 2, borderColor: border, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 13 });
 
@@ -179,7 +183,11 @@ export function GramsSheet() {
             <TrashIcon />
           </Pressable>
         )}
-        <Pressable onPress={confirm} style={{ flex: 1, backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center" }}>
+        <Pressable
+          onPress={guard(confirm)}
+          disabled={!canConfirm}
+          style={{ flex: 1, backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center", opacity: canConfirm ? 1 : 0.4 }}
+        >
           <Txt style={{ color: colors.bg, fontFamily: font.xb, fontSize: 16 }}>{confirmLabel}</Txt>
         </Pressable>
       </View>

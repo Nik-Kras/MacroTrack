@@ -4,15 +4,17 @@ import { Pressable, TextInput, View } from "react-native";
 import { BottomSheet } from "@/components/BottomSheet";
 import { PlusIcon, TrashIcon } from "@/components/icons";
 import { Txt, Visual } from "@/components/ui";
-import { findFood, foodEmoji, round, weightLabel } from "@/lib/nutrition";
+import { findFood, foodEmoji, round, weightLabel, yldOf } from "@/lib/nutrition";
 import { pickPhoto } from "@/lib/photo";
 import { deleteDish, saveDish } from "@/overlays/editorActions";
+import { useSubmitGuard } from "@/lib/useSubmitGuard";
 import { useStore } from "@/store/store";
 import { colors, font } from "@/theme";
 
 export function DishBuilderSheet() {
   const store = useStore();
   const { state, patch, close } = store;
+  const guard = useSubmitGuard();
   const acc = colors.accent;
   const DD = state.dishDraft;
   if (!DD) return null;
@@ -20,11 +22,11 @@ export function DishBuilderSheet() {
   const setDD = (k: string, v: any) => patch({ dishDraft: { ...state.dishDraft!, [k]: v } as any });
   const sv = Math.max(1, DD.servings || 1);
 
-  let tk = 0, tp = 0, tc = 0, tf = 0;
+  let tk = 0, tp = 0, tc = 0, tf = 0, predCooked = 0;
   const rows = (DD.ing || []).map((ing, idx) => {
     const fo = findFood(state.foods, ing.foodId);
     const r = ing.grams / 100;
-    if (fo) { tk += fo.kcal * r; tp += fo.p * r; tc += fo.c * r; tf += fo.f * r; }
+    if (fo) { tk += fo.kcal * r; tp += fo.p * r; tc += fo.c * r; tf += fo.f * r; predCooked += ing.grams * yldOf(fo); }
     return { ing, idx, fo };
   });
 
@@ -88,10 +90,30 @@ export function DishBuilderSheet() {
       </Pressable>
 
       {(DD.ing || []).length > 0 && (
-        <View style={{ backgroundColor: colors.inset, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 14, marginBottom: 18 }}>
-          <Txt style={{ fontSize: 13, fontFamily: font.dB, marginBottom: 4 }}>{`${round(tk / sv)} kcal · ${round(tp / sv)}P ${round(tc / sv)}C ${round(tf / sv)}F`}</Txt>
-          <Txt style={{ fontSize: 11.5, color: colors.muted, fontFamily: font.sb }}>{`per serving · ${round(tk)} kcal · ${round(tp)}P ${round(tc)}C ${round(tf)}F total`}</Txt>
-        </View>
+        <>
+          <View style={{ marginBottom: 18 }}>
+            <Txt style={{ fontSize: 11, color: colors.muted, fontFamily: font.b, marginBottom: 6 }}>Cooked weight (optional)</Txt>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.inset, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 13 }}>
+              <TextInput
+                value={DD.cookedWeight != null && DD.cookedWeight !== "" ? String(DD.cookedWeight) : ""}
+                onChangeText={(tx) => setDD("cookedWeight", tx.replace(/[^0-9]/g, ""))}
+                keyboardType="numeric"
+                placeholder={`${round(predCooked)} (predicted)`}
+                placeholderTextColor={colors.dim}
+                style={{ flex: 1, color: colors.text, fontFamily: font.dB, fontSize: 18, padding: 0 }}
+              />
+              <Txt style={{ fontSize: 14, color: colors.muted, fontFamily: font.b }}>g</Txt>
+            </View>
+            <Txt style={{ fontSize: 11, color: colors.dim, fontFamily: font.sb, marginTop: 6 }}>
+              Weigh the finished dish so you can log a portion by cooked weight. Captures water absorbed or lost while cooking. Leave blank to use the predicted value.
+            </Txt>
+          </View>
+
+          <View style={{ backgroundColor: colors.inset, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 14, marginBottom: 18 }}>
+            <Txt style={{ fontSize: 13, fontFamily: font.dB, marginBottom: 4 }}>{`${round(tk / sv)} kcal · ${round(tp / sv)}P ${round(tc / sv)}C ${round(tf / sv)}F`}</Txt>
+            <Txt style={{ fontSize: 11.5, color: colors.muted, fontFamily: font.sb }}>{`per serving · ${round(tk)} kcal · ${round(tp)}P ${round(tc)}C ${round(tf)}F total`}</Txt>
+          </View>
+        </>
       )}
 
       <View style={{ flexDirection: "row", gap: 10 }}>
@@ -100,7 +122,7 @@ export function DishBuilderSheet() {
             <TrashIcon />
           </Pressable>
         )}
-        <Pressable onPress={onSave} style={{ flex: 1, backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center" }}>
+        <Pressable onPress={guard(onSave)} style={{ flex: 1, backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center" }}>
           <Txt style={{ color: colors.bg, fontFamily: font.xb, fontSize: 16 }}>{DD.id ? "Save dish" : "Create dish"}</Txt>
         </Pressable>
       </View>

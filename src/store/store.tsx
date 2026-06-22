@@ -4,20 +4,21 @@ import { AppState as RNAppState } from "react-native";
 import { loadState, saveState, type PersistShape } from "./persistence";
 
 import {
-  BODY_RAW,
   CATMETA,
   DEFAULT_PROFILE,
   DISHRAW,
   FOODS,
 } from "@/data/seed";
-import { computeTargets, seedLogs } from "@/lib/nutrition";
+import { todayISO } from "@/lib/body";
+import { computeTargets } from "@/lib/nutrition";
 import type {
-  BodyRecord,
   CategoryKey,
   CookMode,
   Dish,
   Food,
   LogMap,
+  Measurement,
+  MetricKey,
   Profile,
 } from "@/types";
 
@@ -55,11 +56,13 @@ export interface DishDraft {
   emoji: string;
   photo: string;
   ing: { foodId: number | string; grams: number; mode: CookMode }[];
+  /** Measured total cooked weight (grams). Empty = use the predicted value. */
+  cookedWeight?: number | string;
 }
 
 export interface AppState {
   // navigation / ui
-  screen: "nutrition" | "dishes" | "profile" | "stats";
+  screen: "nutrition" | "dishes" | "profile" | "stats" | "measureDetail";
   dayOffset: number;
   ov: OverlayKey | null;
   // data
@@ -67,7 +70,7 @@ export interface AppState {
   logs: LogMap;
   foods: Food[];
   dishes: Dish[];
-  extraBody: BodyRecord[];
+  measurements: Measurement[];
   // add-food overlay
   addSearch: string;
   addCat: "all" | CategoryKey;
@@ -77,6 +80,8 @@ export interface AppState {
   // dish overlay
   selDish: string | null;
   dishServings: number;
+  dishLogMode: "servings" | "cooked";
+  dishCookedGrams: number;
   // grams editor
   editId: string | null;
   gTarget: "log" | "edit" | "ingredient";
@@ -84,8 +89,10 @@ export interface AppState {
   gIngIdx: number | null;
   // onboarding / measure
   draft: Profile | null;
-  measureMetric: keyof Omit<BodyRecord, "d">;
+  measureMetric: MetricKey;
   measureVal: number;
+  /** which metric the measurement-detail screen is showing */
+  detailMetric: MetricKey;
   // stats / calendar
   statsSpan: "day" | "week" | "month" | "all";
   calY: number;
@@ -106,16 +113,19 @@ const initialUI = {
   searchMode: "log" as const,
   selDish: null,
   dishServings: 1,
+  dishLogMode: "servings" as const,
+  dishCookedGrams: 0,
   editId: null,
   gTarget: "log" as const,
   gMode: "raw" as CookMode,
   gIngIdx: null,
   draft: null,
-  measureMetric: "weight" as const,
-  measureVal: 78,
+  measureMetric: "weight" as MetricKey,
+  measureVal: 70,
+  detailMetric: "weight" as MetricKey,
   statsSpan: "week" as const,
-  calY: 2026,
-  calM: 5,
+  calY: new Date().getFullYear(),
+  calM: new Date().getMonth(),
   foodDraft: null,
   dishDraft: null,
 };
@@ -124,10 +134,10 @@ function buildInitial(profile: Profile): AppState {
   return {
     ...initialUI,
     profile,
-    logs: seedLogs(profile),
+    logs: {},
     foods: FOODS.map((f) => ({ ...f })),
     dishes: DISHRAW.map((d) => ({ ...d, ing: d.ing.map((p) => [...p] as [number | string, number]) })),
-    extraBody: [],
+    measurements: [],
     measureVal: profile.weight,
   };
 }
@@ -139,10 +149,9 @@ interface Store {
   patch: (p: Partial<AppState>) => void;
   open: (ov: OverlayKey, extra?: Partial<AppState>) => void;
   close: () => void;
-  // body
-  bodyRecords: () => BodyRecord[];
-  latestBody: () => BodyRecord;
-  addMeasurement: (metric: keyof Omit<BodyRecord, "d">, val: number) => void;
+  // body measurements
+  addMeasurement: (metric: MetricKey, val: number) => void;
+  deleteMeasurement: (id: string) => void;
   /** Replace all persisted data (e.g. from an imported backup). */
   restore: (data: PersistShape) => void;
 }
@@ -154,6 +163,8 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
     buildInitial({ ...DEFAULT_PROFILE, name: name || DEFAULT_PROFILE.name }),
   );
   const [hydrated, setHydrated] = useState(false);
+  // Monotonic counter for unique measurement ids within a session.
+  const seqRef = useRef(0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Always holds the latest persistable slice so we can flush synchronously
   // (e.g. when the app is backgrounded) without waiting for the debounce.
@@ -172,7 +183,7 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
             logs: data.logs ?? s.logs,
             foods: data.foods ?? s.foods,
             dishes: data.dishes ?? s.dishes,
-            extraBody: data.extraBody ?? s.extraBody,
+            measurements: data.measurements ?? s.measurements,
             measureVal: (data.profile ?? s.profile).weight,
           }));
         }
@@ -211,7 +222,7 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
       logs: state.logs,
       foods: state.foods,
       dishes: state.dishes,
-      extraBody: state.extraBody,
+      measurements: state.measurements,
     };
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -220,7 +231,7 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [hydrated, flush, state.profile, state.logs, state.foods, state.dishes, state.extraBody]);
+  }, [hydrated, flush, state.profile, state.logs, state.foods, state.dishes, state.measurements]);
 
   // Flush immediately when the app is backgrounded/closed so a kill within the
   // debounce window can't lose the most recent edit.
@@ -252,27 +263,23 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
   );
 
   const store = useMemo<Store>(() => {
-    const bodyRecords = () => [...BODY_RAW.map((b) => ({ ...b })), ...state.extraBody];
-    const latestBody = () => {
-      const r = bodyRecords();
-      return r[r.length - 1];
-    };
     return {
       state,
       hydrated,
       patch,
       open,
       close,
-      bodyRecords,
-      latestBody,
       addMeasurement: (metric, val) => {
-        setState((s) => {
-          const recs = [...BODY_RAW.map((b) => ({ ...b })), ...s.extraBody];
-          const last = { ...recs[recs.length - 1] };
-          (last as any)[metric] = val;
-          last.d = (last.d || 0) + 1;
-          return { ...s, extraBody: [...s.extraBody, last] };
-        });
+        setState((s) => ({
+          ...s,
+          measurements: [
+            ...s.measurements,
+            { id: "m" + Date.now().toString(36) + (seqRef.current++).toString(36), metric, value: val, date: todayISO() },
+          ],
+        }));
+      },
+      deleteMeasurement: (id) => {
+        setState((s) => ({ ...s, measurements: s.measurements.filter((m) => m.id !== id) }));
       },
       restore: (data) => {
         setState((s) => ({
@@ -281,10 +288,11 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
           logs: data.logs ?? s.logs,
           foods: data.foods ?? s.foods,
           dishes: data.dishes ?? s.dishes,
-          extraBody: data.extraBody ?? s.extraBody,
+          measurements: data.measurements ?? s.measurements,
           measureVal: (data.profile ?? s.profile).weight,
           // reset transient UI so nothing dangles from the previous data set
           ov: null,
+          screen: "profile",
           dayOffset: 0,
           selFood: null,
           selDish: null,

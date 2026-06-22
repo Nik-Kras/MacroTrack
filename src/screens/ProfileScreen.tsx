@@ -1,31 +1,26 @@
-import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import { ActivityIndicator, Alert, Pressable, ScrollView, View } from "react-native";
 
 import { Spark } from "@/components/Charts";
 import { StatsIcon } from "@/components/icons";
-import { Txt } from "@/components/ui";
-import { GOAL, GOALS_BODY, MC } from "@/data/seed";
+import { Txt, Visual } from "@/components/ui";
+import { GOAL, MC } from "@/data/seed";
+import { METRICS, defaultMetricValue, metricDelta, metricSeries } from "@/lib/body";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { useStore, useTargets } from "@/store/store";
 import { colors, font } from "@/theme";
-import type { BodyRecord } from "@/types";
-
-const metricDefs: { key: keyof Omit<BodyRecord, "d">; label: string; unit: string }[] = [
-  { key: "weight", label: "Weight", unit: " kg" },
-  { key: "waist", label: "Waist", unit: " cm" },
-  { key: "bicep", label: "Bicep", unit: " cm" },
-  { key: "chest", label: "Chest", unit: " cm" },
-  { key: "leg", label: "Leg", unit: " cm" },
-];
+import type { MetricKey } from "@/types";
 
 export function ProfileScreen() {
-  const { state, patch, open, bodyRecords, restore } = useStore();
+  const { state, patch, open, restore } = useStore();
   const t = useTargets();
   const P = state.profile;
   const acc = colors.accent;
-  const recs = bodyRecords();
   const [busy, setBusy] = useState<null | "export" | "import">(null);
+
+  const openDetail = (metric: MetricKey) => patch({ screen: "measureDetail", detailMetric: metric });
+  const logMeasurement = (metric: MetricKey) =>
+    open("measure", { measureMetric: metric, measureVal: defaultMetricValue(state.measurements, metric, P) });
 
   const onExport = async () => {
     if (busy) return;
@@ -36,7 +31,7 @@ export function ProfileScreen() {
         logs: state.logs,
         foods: state.foods,
         dishes: state.dishes,
-        extraBody: state.extraBody,
+        measurements: state.measurements,
       });
     } catch (e: any) {
       Alert.alert("Export failed", e?.message || "Could not create the backup file.");
@@ -84,16 +79,11 @@ export function ProfileScreen() {
     >
       {/* header */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 6, marginBottom: 20 }}>
-        <LinearGradient
-          colors={[acc, "#2a8f63"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ width: 54, height: 54, borderRadius: 99, alignItems: "center", justifyContent: "center" }}
-        >
-          <Txt style={{ fontFamily: font.dB, fontSize: 22, color: colors.bg }}>{(P.name || "A").slice(0, 1).toUpperCase()}</Txt>
-        </LinearGradient>
+        <Pressable onPress={() => open("onb", { draft: { ...P } })}>
+          <Visual photo={P.photo} name={P.name || "You"} emoji={(P.name || "🙂").slice(0, 1).toUpperCase()} size={54} radius={27} />
+        </Pressable>
         <View style={{ flex: 1 }}>
-          <Txt style={{ fontFamily: font.dB, fontSize: 22 }}>{P.name}</Txt>
+          <Txt style={{ fontFamily: font.dB, fontSize: 22, color: P.name ? colors.text : colors.muted }}>{P.name || "Add your name"}</Txt>
           <Txt style={{ fontSize: 12.5, color: colors.muted, fontFamily: font.sb }}>{`${P.weight} kg · ${P.height} cm · ${P.age} y`}</Txt>
         </View>
         <Pressable
@@ -133,41 +123,57 @@ export function ProfileScreen() {
       {/* body */}
       <View style={{ marginTop: 24, marginBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Txt style={{ fontFamily: font.dB, fontSize: 17 }}>Body</Txt>
-        <Pressable onPress={() => open("measure", { measureMetric: "weight", measureVal: recs[recs.length - 1].weight })}>
+        <Pressable onPress={() => logMeasurement("weight")}>
           <Txt style={{ fontSize: 12.5, fontFamily: font.b, color: acc }}>+ Log measurement</Txt>
         </Pressable>
       </View>
 
       <View style={{ gap: 10 }}>
-        {metricDefs.map((md) => {
-          const series = recs.map((r) => r[md.key]);
-          const cur = series[series.length - 1], start = series[0], goal = GOALS_BODY[md.key];
-          const total = Math.abs(goal - start) || 1, done = Math.abs(cur - start);
-          const pct = Math.max(0, Math.min((done / total) * 100, 100));
-          const delta = +(cur - start).toFixed(1);
-          const trend = (delta === 0 ? "No change" : (delta > 0 ? "+" : "") + delta + md.unit) + " since start";
+        {METRICS.map((md) => {
+          const series = metricSeries(state.measurements, md.key).map((m) => m.value);
+          const hasData = series.length > 0;
+          const cur = hasData ? series[series.length - 1] : null;
+          const delta = metricDelta(state.measurements, md.key);
+          const goal = md.key === "weight" ? P.goalWeight : null;
+          const trend = !hasData
+            ? "No data yet — tap to log"
+            : series.length < 2
+            ? "First entry · tap for details"
+            : (delta === 0 ? "No change" : (delta > 0 ? "+" : "") + delta + " " + md.unit) + " since start";
+          // weight-goal progress (only metric with a user goal)
+          const start = hasData ? series[0] : 0;
+          const total = goal != null ? Math.abs(goal - start) || 1 : 1;
+          const done = goal != null && cur != null ? Math.abs(cur - start) : 0;
+          const pct = goal != null ? Math.max(0, Math.min((done / total) * 100, 100)) : 0;
           return (
-            <View key={md.key} style={{ backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border3, borderRadius: 16, padding: 14 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                <View>
+            <Pressable
+              key={md.key}
+              onPress={() => openDetail(md.key)}
+              style={{ backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border3, borderRadius: 16, padding: 14 }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: goal != null && hasData ? 10 : 0 }}>
+                <View style={{ flex: 1 }}>
                   <Txt style={{ fontSize: 13.5, fontFamily: font.b }}>{md.label}</Txt>
                   <Txt style={{ fontSize: 11.5, color: colors.muted, fontFamily: font.sb, marginTop: 2 }}>{trend}</Txt>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-                  <Spark vals={series} color={acc} />
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Txt style={{ fontFamily: font.dB, fontSize: 18 }}>
-                      {cur}
-                      <Txt style={{ fontSize: 11, color: colors.dim, fontFamily: font.b }}>{md.unit}</Txt>
+                  {series.length >= 2 && <Spark vals={series} color={acc} />}
+                  <View style={{ alignItems: "flex-end", minWidth: 52 }}>
+                    <Txt style={{ fontFamily: font.dB, fontSize: 18, color: hasData ? colors.text : colors.dim }}>
+                      {hasData ? cur : "—"}
+                      {hasData && <Txt style={{ fontSize: 11, color: colors.dim, fontFamily: font.b }}>{" " + md.unit}</Txt>}
                     </Txt>
-                    <Txt style={{ fontSize: 10.5, color: colors.dim, fontFamily: font.b }}>{`goal ${goal}${md.unit.trim()}`}</Txt>
+                    {goal != null && <Txt style={{ fontSize: 10.5, color: colors.dim, fontFamily: font.b }}>{`goal ${goal}${md.unit}`}</Txt>}
                   </View>
+                  <Txt style={{ fontSize: 18, color: colors.dim, marginLeft: 2 }}>›</Txt>
                 </View>
               </View>
-              <View style={{ height: 6, borderRadius: 99, backgroundColor: colors.track, overflow: "hidden" }}>
-                <View style={{ width: `${pct}%`, height: "100%", borderRadius: 99, backgroundColor: acc }} />
-              </View>
-            </View>
+              {goal != null && hasData && (
+                <View style={{ height: 6, borderRadius: 99, backgroundColor: colors.track, overflow: "hidden" }}>
+                  <View style={{ width: `${pct}%`, height: "100%", borderRadius: 99, backgroundColor: acc }} />
+                </View>
+              )}
+            </Pressable>
           );
         })}
       </View>

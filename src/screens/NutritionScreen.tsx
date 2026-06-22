@@ -8,6 +8,7 @@ import { CATMETA, MC } from "@/data/seed";
 import {
   dateForOffset,
   dayKey,
+  entryMacros,
   findDish,
   findFood,
   glyphForLog,
@@ -32,8 +33,15 @@ export function NutritionScreen() {
   const key = dayKey(state.dayOffset);
   const dayLogs = state.logs[key] || [];
   const sum = useMemo(
-    () => dayLogs.reduce((a, l) => ({ kcal: a.kcal + l.kcal, p: a.p + l.p, c: a.c + l.c, f: a.f + l.f }), { kcal: 0, p: 0, c: 0, f: 0 }),
-    [dayLogs],
+    () =>
+      dayLogs.reduce(
+        (a, l) => {
+          const m = entryMacros(l, state.foods, state.dishes);
+          return { kcal: a.kcal + m.kcal, p: a.p + m.p, c: a.c + m.c, f: a.f + m.f };
+        },
+        { kcal: 0, p: 0, c: 0, f: 0 },
+      ),
+    [dayLogs, state.foods, state.dishes],
   );
   const { dateLabel, dateWord } = dateLabels(state.dayOffset);
   const acc = colors.accent;
@@ -136,6 +144,7 @@ export function NutritionScreen() {
           {dayLogs.map((l) => {
             const obj = l.kind === "dish" ? findDish(state.dishes, l.dishId) : findFood(state.foods, l.foodId);
             const wlab = l.kind === "dish" ? `${l.grams} g` : weightLabel(findFood(state.foods, l.foodId), l.grams, l.mode);
+            const m = entryMacros(l, state.foods, state.dishes);
             return (
               <Pressable
                 key={l.id}
@@ -147,11 +156,11 @@ export function NutritionScreen() {
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Txt numberOfLines={1} style={{ fontSize: 14.5, fontFamily: font.b }}>{l.name}</Txt>
                   <Txt style={{ fontSize: 12, color: colors.muted, fontFamily: font.sb, marginTop: 2 }}>
-                    {`${wlab} · P ${round(l.p)} · C ${round(l.c)} · F ${round(l.f)}`}
+                    {`${wlab} · P ${round(m.p)} · C ${round(m.c)} · F ${round(m.f)}`}
                   </Txt>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
-                  <Txt style={{ fontSize: 14.5, fontFamily: font.xb }}>{l.kcal}</Txt>
+                  <Txt style={{ fontSize: 14.5, fontFamily: font.xb }}>{m.kcal}</Txt>
                   <Txt style={{ fontSize: 10.5, color: colors.dim, fontFamily: font.b, letterSpacing: 0.4 }}>KCAL</Txt>
                 </View>
               </Pressable>

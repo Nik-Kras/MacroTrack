@@ -32,9 +32,9 @@ export function AddFoodSheet() {
   };
 
   return (
-    <BottomSheet visible onClose={close} handle={false} padded={false} scroll={false}>
+    <BottomSheet visible onClose={close} handle={false} padded={false} scroll={false} fill>
       {/* sticky header */}
-      <View style={{ paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10 }}>
+      <View style={{ paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10, flexShrink: 0 }}>
         <View style={{ width: 38, height: 4, borderRadius: 99, backgroundColor: "#333b46", alignSelf: "center", marginBottom: 14 }} />
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
           <Txt style={{ fontFamily: font.dB, fontSize: 19 }}>Add food</Txt>
@@ -66,8 +66,8 @@ export function AddFoodSheet() {
         </ScrollView>
       </View>
 
-      {/* results */}
-      <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      {/* results — flex into the space above the keyboard so the list stays visible while typing */}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 6, paddingBottom: 24 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Pressable
           onPress={() => openFoodEditor(store, null)}
           style={{ flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderColor: colors.border4 }}

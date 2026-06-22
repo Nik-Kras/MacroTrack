@@ -1,10 +1,11 @@
 import React from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
 
 import { BottomSheet } from "@/components/BottomSheet";
-import { Stepper, Txt } from "@/components/ui";
+import { Stepper, Txt, Visual } from "@/components/ui";
 import { ACTMETA } from "@/data/seed";
 import { computeTargets } from "@/lib/nutrition";
+import { pickPhoto } from "@/lib/photo";
 import { useStore } from "@/store/store";
 import { colors, font } from "@/theme";
 import type { ActivityKey, GoalKey, Profile, Sex } from "@/types";
@@ -33,6 +34,26 @@ export function OnboardingSheet() {
     <BottomSheet visible onClose={close}>
       <Txt style={{ fontFamily: font.dB, fontSize: 21, marginBottom: 4 }}>Your profile &amp; goal</Txt>
       <Txt style={{ fontSize: 12.5, color: colors.muted, fontFamily: font.sb, marginBottom: 20 }}>Targets recalculate automatically</Txt>
+
+      {/* name + photo */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 20 }}>
+        <Pressable onPress={async () => { const uri = await pickPhoto(); if (uri) setD("photo", uri); }}>
+          <Visual photo={D.photo} name={D.name || "You"} emoji={(D.name || "🙂").slice(0, 1).toUpperCase()} size={64} radius={32} />
+          <View style={{ position: "absolute", bottom: -2, right: -2, backgroundColor: acc, borderRadius: 99, width: 22, height: 22, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.card }}>
+            <Txt style={{ fontSize: 11, color: colors.bg, fontFamily: font.xb }}>+</Txt>
+          </View>
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          {label("Name")}
+          <TextInput
+            value={D.name}
+            onChangeText={(t) => setD("name", t)}
+            placeholder="Your name"
+            placeholderTextColor={colors.dim}
+            style={{ backgroundColor: colors.inset, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 13, color: colors.text, fontFamily: font.b, fontSize: 15 }}
+          />
+        </View>
+      </View>
 
       {label("Sex")}
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 18 }}>

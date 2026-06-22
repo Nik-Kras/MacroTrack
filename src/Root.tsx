@@ -1,5 +1,5 @@
-import React from "react";
-import { Pressable, View } from "react-native";
+import React, { useEffect } from "react";
+import { BackHandler, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DishIcon, LeafIcon, PlusIcon, ProfileIcon } from "@/components/icons";
@@ -13,6 +13,7 @@ import { GramsSheet } from "@/overlays/GramsSheet";
 import { MeasureSheet } from "@/overlays/MeasureSheet";
 import { OnboardingSheet } from "@/overlays/OnboardingSheet";
 import { DishesScreen } from "@/screens/DishesScreen";
+import { MeasureDetailScreen } from "@/screens/MeasureDetailScreen";
 import { NutritionScreen } from "@/screens/NutritionScreen";
 import { ProfileScreen } from "@/screens/ProfileScreen";
 import { StatsScreen } from "@/screens/StatsScreen";
@@ -45,7 +46,10 @@ function TabBar() {
       }}
     >
       {tabs.map(({ key, label, Icon }) => {
-        const on = state.screen === key || (key === "nutrition" && state.screen === "stats");
+        const on =
+          state.screen === key ||
+          (key === "nutrition" && state.screen === "stats") ||
+          (key === "profile" && state.screen === "measureDetail");
         const color = on ? acc : dim;
         return (
           <Pressable key={key} onPress={() => patch({ screen: key })} style={{ flex: 1, alignItems: "center", gap: 4, paddingVertical: 4 }}>
@@ -102,13 +106,30 @@ function Overlays() {
 }
 
 export function Root() {
-  const { state } = useStore();
+  const { state, patch } = useStore();
   const insets = useSafeAreaInsets();
+
+  // Android hardware/gesture Back: navigate within the app instead of exiting it.
+  // (Open overlays are <Modal>s that consume Back via their own onRequestClose,
+  // so this only runs at the screen level.)
+  useEffect(() => {
+    const onBack = () => {
+      if (state.ov) return false; // an overlay is up — let the Modal handle it
+      if (state.screen === "stats") { patch({ screen: "nutrition" }); return true; }
+      if (state.screen === "measureDetail") { patch({ screen: "profile" }); return true; }
+      if (state.screen === "nutrition" && state.dayOffset !== 0) { patch({ dayOffset: 0 }); return true; }
+      if (state.screen === "dishes" || state.screen === "profile") { patch({ screen: "nutrition" }); return true; }
+      return false; // on the home screen at today — allow the OS to background the app
+    };
+    const sub = BackHandler.addEventListener("hardwareBackPress", onBack);
+    return () => sub.remove();
+  }, [state.ov, state.screen, state.dayOffset, patch]);
 
   let Screen = NutritionScreen;
   if (state.screen === "dishes") Screen = DishesScreen;
   else if (state.screen === "profile") Screen = ProfileScreen;
   else if (state.screen === "stats") Screen = StatsScreen;
+  else if (state.screen === "measureDetail") Screen = MeasureDetailScreen;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>

@@ -18,7 +18,10 @@ export function openFoodEditor(store: StoreLike, food: Food | null) {
         c: food.c,
         f: food.f,
         kcal: food.kcal,
-        kcalManual: false,
+        // Preserve an explicit (measured) calorie value: when the stored kcal doesn't
+        // match the Atwater estimate (4·P + 4·C + 9·F), open in manual mode so a save
+        // can't silently overwrite it. Atwater-consistent foods stay in auto mode.
+        kcalManual: Math.round((food.p || 0) * 4 + (food.c || 0) * 4 + (food.f || 0) * 9) !== food.kcal,
         emoji: food.emoji || "",
         photo: food.photo || "",
         cats: [...(food.cats || [])],
@@ -86,6 +89,7 @@ export function saveDish(store: StoreLike) {
   const ing = (d.ing || [])
     .filter((i: any) => i.grams > 0)
     .map((i: any) => [i.foodId, i.grams] as [number | string, number]);
+  const cookedWeight = parseFloat(String(d.cookedWeight));
   const base = {
     name: (d.name || "").trim() || "New dish",
     servings: Math.max(1, d.servings || 1),
@@ -93,6 +97,7 @@ export function saveDish(store: StoreLike) {
     emoji: d.emoji || "",
     photo: d.photo || "",
     ing,
+    cookedWeight: cookedWeight > 0 ? Math.round(cookedWeight) : undefined,
   };
   const dishes = store.state.dishes;
   const idx = dishes.findIndex((x) => x.id === d.id);

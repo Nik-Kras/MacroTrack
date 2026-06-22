@@ -1,52 +1,76 @@
 import React from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, TextInput, View } from "react-native";
 
 import { BottomSheet } from "@/components/BottomSheet";
 import { EditIcon } from "@/components/icons";
 import { Txt, Visual } from "@/components/ui";
 import { MC } from "@/data/seed";
-import { catColor, dateForOffset, dayKey, dishMacros, findFood, isCookable, round, toCooked } from "@/lib/nutrition";
+import { catColor, dateForOffset, dayKey, dishMacros, effectiveCookedWeight, findFood, isCookable, macrosForCookedGrams, round, toCooked } from "@/lib/nutrition";
+import { useSubmitGuard } from "@/lib/useSubmitGuard";
 import { useStore } from "@/store/store";
 import { colors, font } from "@/theme";
 import type { LogEntry } from "@/types";
 
 export function DishSheet() {
   const { state, patch, open, close } = useStore();
+  const guard = useSubmitGuard();
   const acc = colors.accent;
   const d = state.dishes.find((x) => x.id === state.selDish);
   if (!d) return null;
 
   const m = dishMacros(d, state.foods);
   const sv = state.dishServings;
+  const mode = state.dishLogMode;
+  // Round once so the divisor matches the displayed total and the quick-fill chips.
+  const cookedTotal = Math.round(effectiveCookedWeight(d.cookedWeight, m.cooked));
+  const cg = state.dishCookedGrams || 0;
   const dateWord = state.dayOffset === 0 ? "today" : state.dayOffset === -1 ? "yesterday" : dateForOffset(state.dayOffset).toLocaleDateString("en", { month: "short", day: "numeric" });
 
+  // Macros for the currently selected logging mode.
+  const active =
+    mode === "cooked"
+      ? macrosForCookedGrams(m, cookedTotal, cg)
+      : { kcal: m.perKcal * sv, p: m.perP * sv, c: m.perC * sv, f: m.perF * sv };
+
   const macros = [
-    { label: "KCAL", value: round(m.perKcal * sv), color: acc },
-    { label: "PROTEIN", value: round(m.perP * sv), color: MC.p },
-    { label: "CARBS", value: round(m.perC * sv), color: MC.c },
-    { label: "FAT", value: round(m.perF * sv), color: MC.f },
+    { label: "KCAL", value: round(active.kcal), color: acc },
+    { label: "PROTEIN", value: round(active.p), color: MC.p },
+    { label: "CARBS", value: round(active.c), color: MC.c },
+    { label: "FAT", value: round(active.f), color: MC.f },
   ];
 
+  const setMode = (mm: "servings" | "cooked") => {
+    if (mm === "cooked" && cg <= 0) {
+      patch({ dishLogMode: mm, dishCookedGrams: Math.round(cookedTotal / Math.max(1, d.servings)) });
+    } else {
+      patch({ dishLogMode: mm });
+    }
+  };
+
   const useDish = () => {
+    const isCooked = mode === "cooked";
     const item: LogEntry = {
       id: "l" + Math.random().toString(36).slice(2, 8),
       kind: "dish",
       dishId: d.id,
-      name: d.name + (sv > 1 ? ` ×${sv}` : ""),
-      grams: round((m.grams / d.servings) * sv),
-      mode: "na",
-      kcal: round(m.perKcal * sv),
-      p: +(m.perP * sv).toFixed(1),
-      c: +(m.perC * sv).toFixed(1),
-      f: +(m.perF * sv).toFixed(1),
+      name: isCooked ? `${d.name} · ${Math.round(cg)} g` : d.name + (sv > 1 ? ` ×${sv}` : ""),
+      grams: isCooked ? Math.round(cg) : round((m.grams / d.servings) * sv),
+      mode: isCooked ? "cooked" : "na",
+      kcal: round(active.kcal),
+      p: +active.p.toFixed(1),
+      c: +active.c.toFixed(1),
+      f: +active.f.toFixed(1),
       cat: "protein",
     };
     const k = dayKey(state.dayOffset);
     patch({ logs: { ...state.logs, [k]: [...(state.logs[k] || []), item] }, ov: null, selDish: null, screen: "nutrition" });
   };
 
+  // In cooked-weight mode a 0 g entry is meaningless; servings mode is always ≥ 1.
+  const canUse = mode === "cooked" ? Math.round(cg) > 0 : true;
+
   const editDish = () =>
-    open("dishEdit", { dishDraft: { id: d.id, name: d.name, servings: d.servings, emoji: d.emoji || d.glyph || "🍽", photo: d.photo || "", ing: d.ing.map(([id, gr]) => ({ foodId: id, grams: gr, mode: "raw" })) } });
+    open("dishEdit", { dishDraft: { id: d.id, name: d.name, servings: d.servings, emoji: d.emoji || d.glyph || "🍽", photo: d.photo || "", cookedWeight: d.cookedWeight ?? "", ing: d.ing.map(([id, gr]) => ({ foodId: id, grams: gr, mode: "raw" as const })) } });
 
   return (
     <BottomSheet visible onClose={close} handle={false} padded={false} maxHeightPct={0.92}>
@@ -61,7 +85,7 @@ export function DishSheet() {
           <View style={{ flex: 1 }}>
             <Txt style={{ fontFamily: font.dB, fontSize: 23 }}>{d.name}</Txt>
             <Txt style={{ fontSize: 12.5, color: colors.muted, fontFamily: font.sb, marginTop: 3, marginBottom: 16 }}>
-              {`Recipe makes ${d.servings} servings · ${round(m.grams)} g total`}
+              {`${d.servings} servings · ${round(m.grams)} g raw → ${round(cookedTotal)} g cooked`}
             </Txt>
           </View>
           <Pressable onPress={editDish} style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border2, borderRadius: 99, paddingVertical: 8, paddingHorizontal: 13 }}>
@@ -79,7 +103,9 @@ export function DishSheet() {
           ))}
         </View>
         <Txt style={{ fontSize: 11, color: colors.dim, fontFamily: font.b, textAlign: "center", marginBottom: 18 }}>
-          {`for ${sv} serving${sv > 1 ? "s" : ""} (per serving: ${round(m.perKcal)} kcal)`}
+          {mode === "cooked"
+            ? `${Math.round(cg)} g of ${round(cookedTotal)} g cooked total`
+            : `for ${sv} serving${sv > 1 ? "s" : ""} · per serving ${round(m.perKcal)} kcal`}
         </Txt>
 
         <Txt style={{ fontSize: 13, fontFamily: font.b, color: colors.muted, marginBottom: 10 }}>Ingredients</Txt>
@@ -100,17 +126,63 @@ export function DishSheet() {
         </View>
 
         <View style={{ backgroundColor: colors.inset, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 16 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Txt style={{ fontSize: 13.5, fontFamily: font.b }}>Servings to log</Txt>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-              <Pressable onPress={() => patch({ dishServings: Math.max(1, sv - 1) })} style={stepBtn}><Txt style={{ fontSize: 20, color: colors.subtle }}>−</Txt></Pressable>
-              <Txt style={{ fontFamily: font.dB, fontSize: 22, minWidth: 30, textAlign: "center" }}>{sv}</Txt>
-              <Pressable onPress={() => patch({ dishServings: sv + 1 })} style={stepBtn}><Txt style={{ fontSize: 20, color: colors.subtle }}>+</Txt></Pressable>
-            </View>
+          {/* mode toggle */}
+          <View style={{ flexDirection: "row", backgroundColor: colors.bg, borderRadius: 99, padding: 4, marginBottom: 14 }}>
+            {(["servings", "cooked"] as const).map((mm) => {
+              const on = mode === mm;
+              return (
+                <Pressable key={mm} onPress={() => setMode(mm)} style={{ flex: 1, paddingVertical: 8, borderRadius: 99, backgroundColor: on ? acc : "transparent", alignItems: "center" }}>
+                  <Txt style={{ fontSize: 12.5, fontFamily: font.b, color: on ? colors.bg : colors.muted }}>{mm === "servings" ? "Servings" : "Cooked weight"}</Txt>
+                </Pressable>
+              );
+            })}
           </View>
+
+          {mode === "servings" ? (
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Txt style={{ fontSize: 13.5, fontFamily: font.b }}>Servings to log</Txt>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                <Pressable onPress={() => patch({ dishServings: Math.max(1, sv - 1) })} style={stepBtn}><Txt style={{ fontSize: 20, color: colors.subtle }}>−</Txt></Pressable>
+                <Txt style={{ fontFamily: font.dB, fontSize: 22, minWidth: 30, textAlign: "center" }}>{sv}</Txt>
+                <Pressable onPress={() => patch({ dishServings: sv + 1 })} style={stepBtn}><Txt style={{ fontSize: 20, color: colors.subtle }}>+</Txt></Pressable>
+              </View>
+            </View>
+          ) : (
+            <>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <Txt style={{ fontSize: 13.5, fontFamily: font.b }}>Cooked grams to log</Txt>
+                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3, backgroundColor: colors.bg, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 12, minWidth: 110 }}>
+                  <TextInput
+                    value={cg ? String(Math.round(cg)) : ""}
+                    onChangeText={(tx) => patch({ dishCookedGrams: parseInt(tx.replace(/[^0-9]/g, ""), 10) || 0 })}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    placeholderTextColor={colors.dim}
+                    style={{ flex: 1, color: colors.text, fontFamily: font.dB, fontSize: 22, padding: 0, textAlign: "right" }}
+                  />
+                  <Txt style={{ fontSize: 14, color: colors.muted, fontFamily: font.b }}>g</Txt>
+                </View>
+              </View>
+              <View style={{ flexDirection: "row", gap: 7, marginTop: 12 }}>
+                {[
+                  { label: "1 serving", val: Math.round(cookedTotal / Math.max(1, d.servings)) },
+                  { label: "½ dish", val: Math.round(cookedTotal / 2) },
+                  { label: "Whole dish", val: Math.round(cookedTotal) },
+                ].map((q) => (
+                  <Pressable key={q.label} onPress={() => patch({ dishCookedGrams: q.val })} style={{ flex: 1, paddingVertical: 9, borderRadius: 11, backgroundColor: colors.chip, borderWidth: 1, borderColor: colors.border5, alignItems: "center" }}>
+                    <Txt style={{ fontSize: 11.5, fontFamily: font.b, color: colors.subtle }}>{q.label}</Txt>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
         </View>
 
-        <Pressable onPress={useDish} style={{ backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center" }}>
+        <Pressable
+          onPress={guard(useDish)}
+          disabled={!canUse}
+          style={{ backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center", opacity: canUse ? 1 : 0.4 }}
+        >
           <Txt style={{ color: colors.bg, fontFamily: font.xb, fontSize: 16 }}>{`Use · add to ${dateWord}`}</Txt>
         </Pressable>
       </View>

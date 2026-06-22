@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SQLite from "expo-sqlite";
 
 import { migrateShapePhotos } from "@/lib/photo";
-import type { BodyRecord, Dish, Food, LogMap, Profile } from "@/types";
+import type { Dish, Food, LogMap, Measurement, Profile } from "@/types";
 
 /**
  * The slice of app state that is persisted to disk.
@@ -13,7 +13,7 @@ export interface PersistShape {
   logs: LogMap;
   foods: Food[];
   dishes: Dish[];
-  extraBody: BodyRecord[];
+  measurements: Measurement[];
 }
 
 const DB_NAME = "macrotrack.db";
@@ -68,7 +68,7 @@ function parseShape(raw: string | null): PersistShape | null {
     logs: (data.logs ?? {}) as LogMap,
     foods: (data.foods ?? []) as Food[],
     dishes: (data.dishes ?? []) as Dish[],
-    extraBody: (data.extraBody ?? []) as BodyRecord[],
+    measurements: (data.measurements ?? []) as Measurement[],
   };
 }
 

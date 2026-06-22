@@ -15,7 +15,9 @@ import { gradientFor } from "@/lib/nutrition";
 import { colors, font } from "@/theme";
 
 export function Txt({ style, ...rest }: TextProps & { style?: StyleProp<TextStyle> }) {
-  return <Text {...rest} style={[{ color: colors.text, fontFamily: font.sb }, style]} />;
+  // Cap OS font scaling so very large accessibility text can't overflow the
+  // app's many fixed-height pills/rows; callers can still override via props.
+  return <Text maxFontSizeMultiplier={1.3} {...rest} style={[{ color: colors.text, fontFamily: font.sb }, style]} />;
 }
 
 /** Food/dish visual: local photo if present, else deterministic gradient tile + emoji. */

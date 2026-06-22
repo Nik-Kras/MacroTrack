@@ -27,8 +27,14 @@ export interface Dish {
   glyph?: string;
   emoji?: string;
   photo?: string;
-  /** [foodId, grams] pairs */
+  /** [foodId, rawGrams] pairs */
   ing: [number | string, number][];
+  /**
+   * Total weight of the finished, cooked dish (grams), as measured by the user.
+   * Used to log a portion by cooked weight. When unset, a value is predicted
+   * from each ingredient's yield (Σ rawGrams × yield).
+   */
+  cookedWeight?: number;
   custom?: boolean;
 }
 
@@ -47,14 +53,14 @@ export interface LogEntry {
   cat: string;
 }
 
-export interface BodyRecord {
-  /** day offset from base date (negative = past) */
-  d: number;
-  weight: number;
-  bicep: number;
-  chest: number;
-  waist: number;
-  leg: number;
+export type MetricKey = "weight" | "waist" | "bicep" | "chest" | "leg";
+
+export interface Measurement {
+  id: string;
+  metric: MetricKey;
+  value: number;
+  /** ISO calendar date (YYYY-MM-DD) the measurement was logged for */
+  date: string;
 }
 
 export interface Profile {
@@ -66,6 +72,8 @@ export interface Profile {
   activity: ActivityKey;
   goal: GoalKey;
   goalWeight: number;
+  /** local file:// URI of the profile photo (optional) */
+  photo?: string;
 }
 
 export interface Targets {

@@ -36,7 +36,7 @@ export function DishesScreen() {
           return (
             <Pressable
               key={d.id}
-              onPress={() => open("dish", { selDish: d.id, dishServings: 1 })}
+              onPress={() => open("dish", { selDish: d.id, dishServings: 1, dishLogMode: "servings", dishCookedGrams: 0 })}
               style={{ width: "47.5%", flexGrow: 1, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border3, borderRadius: 20, overflow: "hidden" }}
             >
               <Visual photo={d.photo} name={d.name} emoji={d.emoji || d.glyph || "🍽"} full height={104} radius={0}>

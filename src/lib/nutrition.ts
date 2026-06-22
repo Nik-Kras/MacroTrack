@@ -3,7 +3,6 @@ import {
   BASE_DATE,
   CATMETA,
   DISHRAW,
-  FOODS,
   GLYPHMAP,
   GOAL,
 } from "@/data/seed";
@@ -87,16 +86,86 @@ export function logFromFood(food: Food, grams: number, mode?: CookMode): LogEntr
 }
 
 export function dishMacros(d: Dish, foods: Food[]) {
-  let k = 0, p = 0, c = 0, f = 0, g = 0;
+  let k = 0, p = 0, c = 0, f = 0, g = 0, cooked = 0;
   d.ing.forEach(([id, gr]) => {
     const fo = findFood(foods, id);
     if (!fo) return;
     const r = gr / 100;
     k += fo.kcal * r; p += fo.p * r; c += fo.c * r; f += fo.f * r; g += gr;
+    cooked += gr * yldOf(fo); // predicted cooked weight from per-ingredient yields
   });
+  const sv = Math.max(1, d.servings || 1);
   return {
-    kcal: k, p, c, f, grams: g,
-    perKcal: k / d.servings, perP: p / d.servings, perC: c / d.servings, perF: f / d.servings,
+    kcal: k, p, c, f,
+    grams: g, // total raw weight
+    cooked, // predicted total cooked weight (Σ rawGrams × yield)
+    perKcal: k / sv, perP: p / sv, perC: c / sv, perF: f / sv,
+  };
+}
+
+/**
+ * The dish's total cooked weight: the user-measured override when set (> 0),
+ * otherwise the value predicted from ingredient yields. Pass `m.cooked` from
+ * dishMacros as the predicted fallback.
+ */
+export function effectiveCookedWeight(override: number | undefined, predicted: number) {
+  return override && override > 0 ? override : predicted;
+}
+
+/** Scale a dish's total macros to the portion implied by `grams` of `cookedTotal`. */
+export function macrosForCookedGrams(
+  m: { kcal: number; p: number; c: number; f: number },
+  cookedTotal: number,
+  grams: number,
+) {
+  const factor = cookedTotal > 0 ? grams / cookedTotal : 0;
+  return {
+    kcal: m.kcal * factor,
+    p: m.p * factor,
+    c: m.c * factor,
+    f: m.f * factor,
+  };
+}
+
+/**
+ * Live macros for a log entry, recomputed from the *current* food/dish definition
+ * so that editing an ingredient (or a dish recipe) propagates to portions already
+ * logged — entries are not frozen snapshots. The macros stored on the entry are
+ * used only as a fallback when its source food/dish no longer exists (e.g. deleted).
+ */
+export function entryMacros(
+  e: LogEntry,
+  foods: Food[],
+  dishes: Dish[],
+): { kcal: number; p: number; c: number; f: number } {
+  const snapshot = { kcal: e.kcal, p: e.p, c: e.c, f: e.f };
+  if (e.kind === "food") {
+    const fo = findFood(foods, e.foodId);
+    if (!fo) return snapshot;
+    const r = e.grams / 100;
+    return {
+      kcal: round(fo.kcal * r),
+      p: +(fo.p * r).toFixed(1),
+      c: +(fo.c * r).toFixed(1),
+      f: +(fo.f * r).toFixed(1),
+    };
+  }
+  const d = findDish(dishes, e.dishId);
+  if (!d) return snapshot;
+  const m = dishMacros(d, foods);
+  if (e.mode === "cooked") {
+    // Logged by cooked weight: scale total macros to e.grams of the cooked total.
+    const cookedTotal = Math.round(effectiveCookedWeight(d.cookedWeight, m.cooked));
+    const s = macrosForCookedGrams(m, cookedTotal, e.grams);
+    return { kcal: round(s.kcal), p: +s.p.toFixed(1), c: +s.c.toFixed(1), f: +s.f.toFixed(1) };
+  }
+  // Logged by servings: e.grams is raw grams, so scale by the raw-weight fraction.
+  const factor = m.grams > 0 ? e.grams / m.grams : 0;
+  return {
+    kcal: round(m.kcal * factor),
+    p: +(m.p * factor).toFixed(1),
+    c: +(m.c * factor).toFixed(1),
+    f: +(m.f * factor).toFixed(1),
   };
 }
 
@@ -141,35 +210,6 @@ export function glyphForLog(l: LogEntry, foods: Food[], dishes: Dish[]) {
   }
   const f = findFood(foods, l.foodId);
   return foodEmoji(f);
-}
-
-// ---- seed history generation (so calendar / stats agree) ----
-function buildDay(off: number, targetCal: number): LogEntry[] {
-  const variants: [number, number][][] = [
-    [[1, 200], [13, 250], [12, 60], [16, 120], [4, 200], [22, 15]],
-    [[10, 220], [14, 240], [7, 150], [21, 80], [3, 100], [27, 150]],
-    [[2, 250], [13, 260], [5, 150], [23, 25], [28, 80], [24, 15]],
-    [[9, 180], [19, 260], [29, 40], [20, 150], [11, 150], [22, 12]],
-  ];
-  const tmpl = variants[((off % variants.length) + variants.length) % variants.length];
-  const baseK = tmpl.reduce((a, [id, g]) => a + findFood(FOODS, id)!.kcal * g / 100, 0);
-  const desired = targetCal + Math.round(Math.sin(off * 1.3) * 240 - 70);
-  const factor = desired / baseK;
-  return tmpl.map(([id, g]) =>
-    logFromFood(findFood(FOODS, id)!, Math.max(10, Math.round((g * factor) / 5) * 5)),
-  );
-}
-
-/** Build the initial seeded log map (today, yesterday, and -13..-2 history). */
-export function seedLogs(profile: Profile) {
-  const today = dayKey(0), yest = dayKey(-1);
-  const mk = (id: number, grams: number) => logFromFood(findFood(FOODS, id)!, grams);
-  const logs: Record<string, LogEntry[]> = {};
-  logs[today] = [mk(3, 150), mk(4, 200), mk(16, 120)];
-  logs[yest] = [mk(12, 80), mk(8, 30), mk(1, 220), mk(13, 250), mk(21, 90), mk(4, 150)];
-  const seedCal = computeTargets(profile).cal;
-  for (let off = -13; off <= -2; off++) logs[dayKey(off)] = buildDay(off, seedCal);
-  return logs;
 }
 
 export { DISHRAW };

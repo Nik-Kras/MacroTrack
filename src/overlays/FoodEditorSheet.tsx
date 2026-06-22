@@ -7,12 +7,14 @@ import { Txt, Visual } from "@/components/ui";
 import { CATMETA, EMOJIS } from "@/data/seed";
 import { pickPhoto } from "@/lib/photo";
 import { deleteFood, saveFood } from "@/overlays/editorActions";
+import { useSubmitGuard } from "@/lib/useSubmitGuard";
 import { useStore } from "@/store/store";
 import { colors, font } from "@/theme";
 
 export function FoodEditorSheet() {
   const store = useStore();
   const { state, patch } = store;
+  const guard = useSubmitGuard();
   const acc = colors.accent;
   const FD = state.foodDraft;
   if (!FD) return null;
@@ -146,7 +148,7 @@ export function FoodEditorSheet() {
             <TrashIcon />
           </Pressable>
         )}
-        <Pressable onPress={onSave} style={{ flex: 1, backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center" }}>
+        <Pressable onPress={guard(onSave)} style={{ flex: 1, backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center" }}>
           <Txt style={{ color: colors.bg, fontFamily: font.xb, fontSize: 16 }}>{FD.id ? "Save changes" : "Add food"}</Txt>
         </Pressable>
       </View>

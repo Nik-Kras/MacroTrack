@@ -50,7 +50,8 @@ async function inlineAllPhotos(data: PersistShape): Promise<PersistShape> {
   const dishes: Dish[] = await Promise.all(
     data.dishes.map(async (d) => ({ ...d, photo: await inlinePhoto(d.photo) })),
   );
-  return { ...data, foods, dishes };
+  const profile = { ...data.profile, photo: await inlinePhoto(data.profile.photo) };
+  return { ...data, profile, foods, dishes };
 }
 
 /**
@@ -92,7 +93,7 @@ function normalize(data: Partial<PersistShape>): PersistShape | null {
     logs: data.logs ?? {},
     foods: data.foods ?? [],
     dishes: data.dishes ?? [],
-    extraBody: data.extraBody ?? [],
+    measurements: data.measurements ?? [],
   };
 }
 

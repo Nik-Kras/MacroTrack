@@ -15,7 +15,10 @@
       "package": "com.nikkras.macrotrack",
       "adaptiveIcon": {
         "backgroundColor": "#0E1116"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "androidStatusBar": {
       "barStyle": "light-content",
@@ -29,6 +32,12 @@
         }
       ],
       "expo-sqlite"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "97e149cf-378a-4190-9b37-7ed227d981d9"
+      }
+    },
+    "owner": "nikitakras"
   }
 }
