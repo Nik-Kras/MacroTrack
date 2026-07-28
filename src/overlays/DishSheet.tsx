@@ -73,59 +73,23 @@ export function DishSheet() {
     open("dishEdit", { dishDraft: { id: d.id, name: d.name, servings: d.servings, emoji: d.emoji || d.glyph || "🍽", photo: d.photo || "", cookedWeight: d.cookedWeight ?? "", ing: d.ing.map(([id, gr]) => ({ foodId: id, grams: gr, mode: "raw" as const })) } });
 
   return (
-    <BottomSheet visible onClose={close} handle={false} padded={false} maxHeightPct={0.92}>
-      <Visual photo={d.photo} name={d.name} emoji={d.emoji || d.glyph || "🍽"} full height={170} radius={0}>
-        <Pressable onPress={close} style={{ position: "absolute", top: 14, right: 14, width: 34, height: 34, borderRadius: 99, backgroundColor: "rgba(8,10,13,.55)", alignItems: "center", justifyContent: "center" }}>
-          <Txt style={{ fontSize: 16, color: "#fff" }}>✕</Txt>
+    <BottomSheet visible onClose={close} maxHeightPct={0.92}>
+      {/* compact header — the grams controls must be visible without scrolling */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 13, marginBottom: 16 }}>
+        <Visual photo={d.photo} name={d.name} emoji={d.emoji || d.glyph || "🍽"} size={52} radius={15} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Txt numberOfLines={1} style={{ fontFamily: font.dB, fontSize: 19 }}>{d.name}</Txt>
+          <Txt style={{ fontSize: 12, color: colors.muted, fontFamily: font.sb, marginTop: 2 }}>
+            {`${d.servings} servings · ${round(m.grams)} g raw → ${round(cookedTotal)} g cooked`}
+          </Txt>
+        </View>
+        <Pressable onPress={editDish} style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border2, borderRadius: 99, paddingVertical: 8, paddingHorizontal: 13 }}>
+          <EditIcon size={13} color={colors.subtle} />
+          <Txt style={{ fontSize: 12.5, fontFamily: font.b, color: colors.subtle }}>Edit</Txt>
         </Pressable>
-      </Visual>
+      </View>
 
-      <View style={{ paddingHorizontal: 20, paddingTop: 18, paddingBottom: 28 }}>
-        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <Txt style={{ fontFamily: font.dB, fontSize: 23 }}>{d.name}</Txt>
-            <Txt style={{ fontSize: 12.5, color: colors.muted, fontFamily: font.sb, marginTop: 3, marginBottom: 16 }}>
-              {`${d.servings} servings · ${round(m.grams)} g raw → ${round(cookedTotal)} g cooked`}
-            </Txt>
-          </View>
-          <Pressable onPress={editDish} style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border2, borderRadius: 99, paddingVertical: 8, paddingHorizontal: 13 }}>
-            <EditIcon size={13} color={colors.subtle} />
-            <Txt style={{ fontSize: 12.5, fontFamily: font.b, color: colors.subtle }}>Edit</Txt>
-          </Pressable>
-        </View>
-
-        <View style={{ flexDirection: "row", gap: 8, marginBottom: 6 }}>
-          {macros.map((mm) => (
-            <View key={mm.label} style={{ flex: 1, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border3, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 8, alignItems: "center" }}>
-              <Txt style={{ fontFamily: font.dB, fontSize: 18, color: mm.color }}>{mm.value}</Txt>
-              <Txt style={{ fontSize: 10, color: colors.muted, fontFamily: font.b, marginTop: 2 }}>{mm.label}</Txt>
-            </View>
-          ))}
-        </View>
-        <Txt style={{ fontSize: 11, color: colors.dim, fontFamily: font.b, textAlign: "center", marginBottom: 18 }}>
-          {mode === "cooked"
-            ? `${Math.round(cg)} g of ${round(cookedTotal)} g cooked total`
-            : `for ${sv} serving${sv > 1 ? "s" : ""} · per serving ${round(m.perKcal)} kcal`}
-        </Txt>
-
-        <Txt style={{ fontSize: 13, fontFamily: font.b, color: colors.muted, marginBottom: 10 }}>Ingredients</Txt>
-        <View style={{ gap: 7, marginBottom: 22 }}>
-          {d.ing.map(([id, gr], i) => {
-            const fo = findFood(state.foods, id);
-            const grams = fo && isCookable(fo) ? `${gr} g → ${round(toCooked(fo, gr))} g` : `${gr} g`;
-            return (
-              <View key={i} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.card2, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 13 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View style={{ width: 10, height: 10, borderRadius: 99, backgroundColor: catColor(fo ? fo.cats[0] : "") }} />
-                  <Txt style={{ fontSize: 13.5, fontFamily: font.b }}>{fo ? fo.name : "(removed)"}</Txt>
-                </View>
-                <Txt style={{ fontSize: 13, color: colors.muted, fontFamily: font.b }}>{grams}</Txt>
-              </View>
-            );
-          })}
-        </View>
-
-        <View style={{ backgroundColor: colors.inset, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 16 }}>
+      <View style={{ backgroundColor: colors.inset, borderWidth: 1, borderColor: colors.border, borderRadius: 16, paddingVertical: 14, paddingHorizontal: 16, marginBottom: 14 }}>
           {/* mode toggle */}
           <View style={{ flexDirection: "row", backgroundColor: colors.bg, borderRadius: 99, padding: 4, marginBottom: 14 }}>
             {(["servings", "cooked"] as const).map((mm) => {
@@ -176,15 +140,45 @@ export function DishSheet() {
               </View>
             </>
           )}
-        </View>
+      </View>
 
-        <Pressable
-          onPress={guard(useDish)}
-          disabled={!canUse}
-          style={{ backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center", opacity: canUse ? 1 : 0.4 }}
-        >
-          <Txt style={{ color: colors.bg, fontFamily: font.xb, fontSize: 16 }}>{`Use · add to ${dateWord}`}</Txt>
-        </Pressable>
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 6 }}>
+        {macros.map((mm) => (
+          <View key={mm.label} style={{ flex: 1, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border3, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 8, alignItems: "center" }}>
+            <Txt style={{ fontFamily: font.dB, fontSize: 18, color: mm.color }}>{mm.value}</Txt>
+            <Txt style={{ fontSize: 10, color: colors.muted, fontFamily: font.b, marginTop: 2 }}>{mm.label}</Txt>
+          </View>
+        ))}
+      </View>
+      <Txt style={{ fontSize: 11, color: colors.dim, fontFamily: font.b, textAlign: "center", marginBottom: 16 }}>
+        {mode === "cooked"
+          ? `${Math.round(cg)} g of ${round(cookedTotal)} g cooked total`
+          : `for ${sv} serving${sv > 1 ? "s" : ""} · per serving ${round(m.perKcal)} kcal`}
+      </Txt>
+
+      <Pressable
+        onPress={guard(useDish)}
+        disabled={!canUse}
+        style={{ backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center", opacity: canUse ? 1 : 0.4, marginBottom: 20 }}
+      >
+        <Txt style={{ color: colors.bg, fontFamily: font.xb, fontSize: 16 }}>{`Use · add to ${dateWord}`}</Txt>
+      </Pressable>
+
+      <Txt style={{ fontSize: 13, fontFamily: font.b, color: colors.muted, marginBottom: 10 }}>Ingredients</Txt>
+      <View style={{ gap: 7 }}>
+        {d.ing.map(([id, gr], i) => {
+          const fo = findFood(state.foods, id);
+          const grams = fo && isCookable(fo) ? `${gr} g → ${round(toCooked(fo, gr))} g` : `${gr} g`;
+          return (
+            <View key={i} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.card2, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 13 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ width: 10, height: 10, borderRadius: 99, backgroundColor: catColor(fo ? fo.cats[0] : "") }} />
+                <Txt style={{ fontSize: 13.5, fontFamily: font.b }}>{fo ? fo.name : "(removed)"}</Txt>
+              </View>
+              <Txt style={{ fontSize: 13, color: colors.muted, fontFamily: font.b }}>{grams}</Txt>
+            </View>
+          );
+        })}
       </View>
     </BottomSheet>
   );
