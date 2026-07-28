@@ -6,6 +6,7 @@ import { StatsIcon } from "@/components/icons";
 import { Txt, Visual } from "@/components/ui";
 import { GOAL, MC } from "@/data/seed";
 import { METRICS, defaultMetricValue, metricDelta, metricSeries } from "@/lib/body";
+import { staleMetrics } from "@/lib/measureReminder";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { useStore, useTargets } from "@/store/store";
 import { colors, font } from "@/theme";
@@ -71,6 +72,9 @@ export function ProfileScreen() {
     { label: "Carbs", value: t.c, color: MC.c },
     { label: "Fat", value: t.f, color: MC.f },
   ];
+
+  // Metrics not logged in the last week — flagged with a red * in the list below.
+  const stale = staleMetrics(state.measurements);
 
   return (
     <ScrollView
@@ -153,7 +157,10 @@ export function ProfileScreen() {
             >
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: goal != null && hasData ? 10 : 0 }}>
                 <View style={{ flex: 1 }}>
-                  <Txt style={{ fontSize: 13.5, fontFamily: font.b }}>{md.label}</Txt>
+                  <Txt style={{ fontSize: 13.5, fontFamily: font.b }}>
+                    {md.label}
+                    {stale.includes(md.key) && <Txt style={{ fontSize: 13.5, fontFamily: font.xb, color: colors.over }}> *</Txt>}
+                  </Txt>
                   <Txt style={{ fontSize: 11.5, color: colors.muted, fontFamily: font.sb, marginTop: 2 }}>{trend}</Txt>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>

@@ -10,6 +10,7 @@ import {
   FOODS,
 } from "@/data/seed";
 import { todayISO } from "@/lib/body";
+import { syncMeasureReminder } from "@/lib/measureReminder";
 import { computeTargets } from "@/lib/nutrition";
 import type {
   CategoryKey,
@@ -243,6 +244,12 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
     });
     return () => sub.remove();
   }, [flush]);
+
+  // Keep the weekly-measurement reminder in sync with the logged data.
+  useEffect(() => {
+    if (!hydrated) return;
+    void syncMeasureReminder(state.measurements);
+  }, [hydrated, state.measurements]);
 
   const patch = useCallback((p: Partial<AppState>) => setState((s) => ({ ...s, ...p })), []);
   const open = useCallback(
