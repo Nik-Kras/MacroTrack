@@ -28,7 +28,7 @@ export function FoodEditorSheet() {
     const saved = saveFood(store);
     if (FD.fromDish) {
       const d = state.dishDraft || { id: null, name: "", servings: 2, emoji: "🍽", photo: "", ing: [] };
-      patch({ dishDraft: { ...d, ing: [...d.ing, { foodId: saved.id, grams: 100, mode: "raw" }] }, ov: "dishEdit", searchMode: "log", foodDraft: null });
+      patch({ dishDraft: d, ov: "grams", gTarget: "ingredient", selFood: saved.id, addGrams: 100, gMode: "raw", gIngIdx: d.ing.length, searchMode: "log", foodDraft: null });
     } else {
       patch({ ov: "addFood", foodDraft: null });
     }

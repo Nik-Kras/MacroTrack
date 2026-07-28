@@ -23,9 +23,9 @@ export function AddFoodSheet() {
 
   const pick = (f: Food) => {
     if (state.searchMode === "dish") {
-      // add ingredient to dish draft
+      // pick grams first; GramsSheet appends the ingredient at gIngIdx on confirm
       const d = state.dishDraft || { id: null, name: "", servings: 2, emoji: "🍽", photo: "", ing: [] };
-      patch({ dishDraft: { ...d, ing: [...d.ing, { foodId: f.id, grams: 100, mode: "raw" }] }, ov: "dishEdit", searchMode: "log" });
+      patch({ dishDraft: d, ov: "grams", gTarget: "ingredient", selFood: f.id, addGrams: 100, gMode: "raw", gIngIdx: d.ing.length, searchMode: "log" });
     } else {
       open("grams", { selFood: f.id, addGrams: 100, gTarget: "log", gMode: "raw" });
     }
