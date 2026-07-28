@@ -85,6 +85,12 @@ export function logFromFood(food: Food, grams: number, mode?: CookMode): LogEntr
   };
 }
 
+/** Entries logged to a past day have no trustworthy clock time, so only the
+ *  live day gets a timestamp; the rest stay ungrouped. */
+export function stampIfToday(entry: LogEntry, dayOffset: number): LogEntry {
+  return dayOffset === 0 ? { ...entry, at: Date.now() } : entry;
+}
+
 export function dishMacros(d: Dish, foods: Food[]) {
   let k = 0, p = 0, c = 0, f = 0, g = 0, cooked = 0;
   d.ing.forEach(([id, gr]) => {

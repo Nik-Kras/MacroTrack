@@ -5,7 +5,7 @@ import { BottomSheet } from "@/components/BottomSheet";
 import { EditIcon } from "@/components/icons";
 import { Txt, Visual } from "@/components/ui";
 import { MC } from "@/data/seed";
-import { catColor, dateForOffset, dayKey, dishMacros, effectiveCookedWeight, findFood, isCookable, macrosForCookedGrams, round, toCooked } from "@/lib/nutrition";
+import { catColor, dateForOffset, dayKey, dishMacros, effectiveCookedWeight, findFood, isCookable, macrosForCookedGrams, round, stampIfToday, toCooked } from "@/lib/nutrition";
 import { useSubmitGuard } from "@/lib/useSubmitGuard";
 import { useStore } from "@/store/store";
 import { colors, font } from "@/theme";
@@ -63,7 +63,7 @@ export function DishSheet() {
       cat: "protein",
     };
     const k = dayKey(state.dayOffset);
-    patch({ logs: { ...state.logs, [k]: [...(state.logs[k] || []), item] }, ov: null, selDish: null, screen: "nutrition" });
+    patch({ logs: { ...state.logs, [k]: [...(state.logs[k] || []), stampIfToday(item, state.dayOffset)] }, ov: null, selDish: null, screen: "nutrition" });
   };
 
   // In cooked-weight mode a 0 g entry is meaningless; servings mode is always ≥ 1.

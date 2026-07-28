@@ -14,6 +14,7 @@ import {
   isCookable,
   logFromFood,
   round,
+  stampIfToday,
   yldOf,
 } from "@/lib/nutrition";
 import { useStore } from "@/store/store";
@@ -92,7 +93,7 @@ export function GramsSheet() {
       ing[state.gIngIdx!] = { foodId: state.selFood, grams: Math.round(state.addGrams), mode: gmode };
       patch({ dishDraft: { ...dd, ing }, ov: "dishEdit", selFood: null, gIngIdx: null });
     } else if (geFood) {
-      const item = logFromFood(geFood, Math.round(state.addGrams), gmode);
+      const item = stampIfToday(logFromFood(geFood, Math.round(state.addGrams), gmode), state.dayOffset);
       if (note.trim()) item.name = note.trim();
       patch({ logs: { ...state.logs, [k]: [...(state.logs[k] || []), item] }, ov: null, selFood: null });
     }

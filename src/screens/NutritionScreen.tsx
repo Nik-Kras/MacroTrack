@@ -15,15 +15,84 @@ import {
   round,
   weightLabel,
 } from "@/lib/nutrition";
+import { groupDayLog, type MacroTotals } from "@/lib/mealGroups";
 import { useStore, useTargets } from "@/store/store";
 import { colors, font } from "@/theme";
-import type { LogEntry } from "@/types";
+import type { Dish, Food, LogEntry } from "@/types";
 
 function dateLabels(off: number) {
   if (off === -1) return { dateLabel: "Yesterday", dateWord: "yesterday" };
   if (off === 0) return { dateLabel: "Today", dateWord: "today" };
   const s = dateForOffset(off).toLocaleDateString("en", { month: "short", day: "numeric" });
   return { dateLabel: s, dateWord: s };
+}
+
+function LogRow({ entry: l, foods, dishes, onEdit, inGroup }: {
+  entry: LogEntry;
+  foods: Food[];
+  dishes: Dish[];
+  onEdit: (l: LogEntry) => void;
+  inGroup?: boolean;
+}) {
+  const obj = l.kind === "dish" ? findDish(dishes, l.dishId) : findFood(foods, l.foodId);
+  const wlab = l.kind === "dish" ? `${l.grams} g` : weightLabel(findFood(foods, l.foodId), l.grams, l.mode);
+  const m = entryMacros(l, foods, dishes);
+  return (
+    <Pressable
+      delayLongPress={550}
+      onLongPress={() => onEdit(l)}
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 13,
+        backgroundColor: inGroup ? colors.card : colors.card2,
+        borderWidth: 1,
+        borderColor: inGroup ? colors.border4 : colors.border3,
+        borderRadius: inGroup ? 13 : 16,
+        paddingVertical: 11,
+        paddingHorizontal: 13,
+      }}
+    >
+      <Visual photo={obj?.photo} name={obj?.name} emoji={glyphForLog(l, foods, dishes)} size={44} radius={13} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Txt numberOfLines={1} style={{ fontSize: 14.5, fontFamily: font.b }}>{l.name}</Txt>
+        <Txt style={{ fontSize: 12, color: colors.muted, fontFamily: font.sb, marginTop: 2 }}>
+          {`${wlab} · P ${round(m.p)} · C ${round(m.c)} · F ${round(m.f)}`}
+        </Txt>
+      </View>
+      <View style={{ alignItems: "flex-end" }}>
+        <Txt style={{ fontSize: 14.5, fontFamily: font.xb }}>{m.kcal}</Txt>
+        <Txt style={{ fontSize: 10.5, color: colors.dim, fontFamily: font.b, letterSpacing: 0.4 }}>KCAL</Txt>
+      </View>
+    </Pressable>
+  );
+}
+
+function GroupHeader({ title, totals }: { title: string; totals: MacroTotals }) {
+  const chips = [
+    { k: "P", v: totals.p, c: MC.p },
+    { k: "C", v: totals.c, c: MC.c },
+    { k: "F", v: totals.f, c: MC.f },
+  ];
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 10, paddingTop: 10, paddingBottom: 9 }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Txt numberOfLines={1} style={{ fontFamily: font.dB, fontSize: 15, letterSpacing: -0.2 }}>{title}</Txt>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 3 }}>
+          {chips.map((m) => (
+            <View key={m.k} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 99, backgroundColor: m.c }} />
+              <Txt style={{ fontSize: 11.5, color: colors.muted, fontFamily: font.sb }}>{`${m.k} ${round(m.v)}`}</Txt>
+            </View>
+          ))}
+        </View>
+      </View>
+      <View style={{ alignItems: "flex-end" }}>
+        <Txt style={{ fontSize: 15, fontFamily: font.xb }}>{totals.kcal}</Txt>
+        <Txt style={{ fontSize: 10.5, color: colors.dim, fontFamily: font.b, letterSpacing: 0.4 }}>KCAL</Txt>
+      </View>
+    </View>
+  );
 }
 
 export function NutritionScreen() {
@@ -45,6 +114,11 @@ export function NutritionScreen() {
   );
   const { dateLabel, dateWord } = dateLabels(state.dayOffset);
   const acc = colors.accent;
+
+  const sections = useMemo(
+    () => groupDayLog(dayLogs, state.foods, state.dishes),
+    [dayLogs, state.foods, state.dishes],
+  );
 
   const macroBars = [
     { label: "Protein", color: MC.p, cur: sum.p, tgt: t.p },
@@ -141,31 +215,20 @@ export function NutritionScreen() {
         </View>
       ) : (
         <View style={{ gap: 8 }}>
-          {dayLogs.map((l) => {
-            const obj = l.kind === "dish" ? findDish(state.dishes, l.dishId) : findFood(state.foods, l.foodId);
-            const wlab = l.kind === "dish" ? `${l.grams} g` : weightLabel(findFood(state.foods, l.foodId), l.grams, l.mode);
-            const m = entryMacros(l, state.foods, state.dishes);
-            return (
-              <Pressable
-                key={l.id}
-                delayLongPress={550}
-                onLongPress={() => editLog(l)}
-                style={{ flexDirection: "row", alignItems: "center", gap: 13, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border3, borderRadius: 16, paddingVertical: 11, paddingHorizontal: 13 }}
-              >
-                <Visual photo={obj?.photo} name={obj?.name} emoji={glyphForLog(l, state.foods, state.dishes)} size={44} radius={13} />
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Txt numberOfLines={1} style={{ fontSize: 14.5, fontFamily: font.b }}>{l.name}</Txt>
-                  <Txt style={{ fontSize: 12, color: colors.muted, fontFamily: font.sb, marginTop: 2 }}>
-                    {`${wlab} · P ${round(m.p)} · C ${round(m.c)} · F ${round(m.f)}`}
-                  </Txt>
+          {sections.map((s) =>
+            s.kind === "single" ? (
+              <LogRow key={s.id} entry={s.entry} foods={state.foods} dishes={state.dishes} onEdit={editLog} />
+            ) : (
+              <View key={s.id} style={{ backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border2, borderRadius: 18, padding: 6, paddingTop: 0 }}>
+                <GroupHeader title={s.title} totals={s.totals} />
+                <View style={{ gap: 6 }}>
+                  {s.entries.map((e) => (
+                    <LogRow key={e.id} entry={e} foods={state.foods} dishes={state.dishes} onEdit={editLog} inGroup />
+                  ))}
                 </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  <Txt style={{ fontSize: 14.5, fontFamily: font.xb }}>{m.kcal}</Txt>
-                  <Txt style={{ fontSize: 10.5, color: colors.dim, fontFamily: font.b, letterSpacing: 0.4 }}>KCAL</Txt>
-                </View>
-              </Pressable>
-            );
-          })}
+              </View>
+            ),
+          )}
         </View>
       )}
     </ScrollView>

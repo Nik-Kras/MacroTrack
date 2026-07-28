@@ -59,6 +59,9 @@ export interface LogEntry {
   c: number;
   f: number;
   cat: string;
+  /** Epoch ms, set only for entries logged to the live day; back-filled and
+   *  legacy entries have none and are never grouped into meals. */
+  at?: number;
 }
 
 export type MetricKey = "weight" | "waist" | "bicep" | "chest" | "leg";
