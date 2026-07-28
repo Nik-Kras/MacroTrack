@@ -46,6 +46,8 @@ export interface FoodDraft {
   custom: boolean;
   cookable: boolean;
   yld: number | string;
+  /** Quick-amount rows being edited; grams kept as raw input text until save. */
+  presets: { g: string; name: string }[];
   fromDish?: boolean;
 }
 

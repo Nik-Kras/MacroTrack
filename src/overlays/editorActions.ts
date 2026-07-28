@@ -1,5 +1,5 @@
 import type { FoodDraft, OverlayKey } from "@/store/store";
-import type { Dish, Food } from "@/types";
+import type { Dish, Food, FoodPreset } from "@/types";
 
 interface StoreLike {
   state: { foods: Food[]; dishes: Dish[]; ov: OverlayKey | null; searchMode: "log" | "dish"; dishDraft: any; foodDraft: FoodDraft | null };
@@ -28,6 +28,7 @@ export function openFoodEditor(store: StoreLike, food: Food | null) {
         custom: !!food.custom,
         cookable: !!food.cookable,
         yld: food.yld || 2,
+        presets: (food.presets || []).map((p) => ({ g: String(p.g), name: p.name || "" })),
       }
     : {
         id: null,
@@ -43,6 +44,7 @@ export function openFoodEditor(store: StoreLike, food: Food | null) {
         custom: true,
         cookable: false,
         yld: 2,
+        presets: [],
       };
   d.fromDish = store.state.ov === "addFood" && store.state.searchMode === "dish";
   store.patch({ ov: "foodEdit", foodDraft: d });
@@ -54,6 +56,10 @@ export function saveFood(store: StoreLike): Food {
   const kcal = d.kcalManual
     ? Math.round(+d.kcal || 0)
     : Math.round((+d.p || 0) * 4 + (+d.c || 0) * 4 + (+d.f || 0) * 9);
+  const presets = (d.presets || [])
+    .map((p) => ({ g: Math.round(parseFloat(p.g)) || 0, name: p.name.trim() }))
+    .filter((p) => p.g > 0)
+    .map((p): FoodPreset => (p.name ? p : { g: p.g }));
   const base = {
     name: (d.name || "").trim() || "Custom food",
     kcal,
@@ -65,6 +71,7 @@ export function saveFood(store: StoreLike): Food {
     photo: d.photo || "",
     cookable: !!d.cookable,
     yld: d.cookable ? parseFloat(String(d.yld)) || 1 : undefined,
+    presets: presets.length ? presets : undefined,
   };
   const foods = store.state.foods;
   const idx = foods.findIndex((x) => x.id === d.id);

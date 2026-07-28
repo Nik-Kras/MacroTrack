@@ -18,6 +18,14 @@ export interface Food {
   emoji?: string;
   photo?: string;
   custom?: boolean;
+  /** Custom quick amounts (uncooked grams, optionally named — "1 slice" = 35 g).
+   *  When set, these replace the default 50/100/… presets in the grams sheet. */
+  presets?: FoodPreset[];
+}
+
+export interface FoodPreset {
+  g: number;
+  name?: string;
 }
 
 export interface Dish {

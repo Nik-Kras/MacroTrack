@@ -23,6 +23,13 @@ export function FoodEditorSheet() {
   const autoK = Math.round((+FD.p || 0) * 4 + (+FD.c || 0) * 4 + (+FD.f || 0) * 9);
   const kcalValue = FD.kcalManual ? FD.kcal : autoK;
 
+  const presets = FD.presets || [];
+  const setPresetRow = (i: number, k: "g" | "name", v: string) => {
+    const next = presets.slice();
+    next[i] = { ...next[i], [k]: v };
+    setFD("presets", next);
+  };
+
   const close = () => patch({ ov: "addFood", foodDraft: null });
   const onSave = () => {
     const saved = saveFood(store);
@@ -141,6 +148,45 @@ export function FoodEditorSheet() {
           </Txt>
         </View>
       )}
+
+      {/* quick amounts */}
+      <Txt style={{ fontSize: 11, color: colors.muted, fontFamily: font.b, marginBottom: 4 }}>Quick amounts (optional)</Txt>
+      <Txt style={{ fontSize: 11, color: colors.dim, fontFamily: font.sb, marginBottom: 8 }}>
+        One-tap portions shown when logging this food — e.g. 35 g named "1 slice". Leave empty to keep the standard 50–250 g row.
+      </Txt>
+      <View style={{ gap: 7, marginBottom: 10 }}>
+        {presets.map((pr, i) => (
+          <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ width: 92, flexDirection: "row", alignItems: "baseline", gap: 3, backgroundColor: colors.inset, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 }}>
+              <TextInput
+                value={pr.g}
+                onChangeText={(t) => setPresetRow(i, "g", t.replace(/[^0-9]/g, ""))}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor={colors.dim}
+                style={{ flex: 1, color: colors.text, fontFamily: font.dB, fontSize: 16, padding: 0 }}
+              />
+              <Txt style={{ fontSize: 11, color: colors.dim, fontFamily: font.b }}>g</Txt>
+            </View>
+            <TextInput
+              value={pr.name}
+              onChangeText={(t) => setPresetRow(i, "name", t)}
+              placeholder="Name, e.g. 1 slice"
+              placeholderTextColor={colors.dim}
+              style={{ flex: 1, backgroundColor: colors.inset, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, color: colors.text, fontFamily: font.b, fontSize: 14 }}
+            />
+            <Pressable onPress={() => setFD("presets", presets.filter((_, x) => x !== i))} style={{ width: 34, height: 34, borderRadius: 99, backgroundColor: colors.chip, borderWidth: 1, borderColor: colors.border5, alignItems: "center", justifyContent: "center" }}>
+              <TrashIcon size={14} color={colors.muted} />
+            </Pressable>
+          </View>
+        ))}
+      </View>
+      <Pressable
+        onPress={() => setFD("presets", [...presets, { g: "", name: "" }])}
+        style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, paddingVertical: 11, borderRadius: 12, borderWidth: 1.5, borderColor: colors.border5, borderStyle: "dashed", marginBottom: 22 }}
+      >
+        <Txt style={{ fontSize: 13, fontFamily: font.b, color: colors.subtle }}>+ Add amount</Txt>
+      </Pressable>
 
       <View style={{ flexDirection: "row", gap: 10 }}>
         {FD.custom && FD.id != null && (

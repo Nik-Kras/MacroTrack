@@ -19,7 +19,7 @@ import {
 import { useStore } from "@/store/store";
 import { useSubmitGuard } from "@/lib/useSubmitGuard";
 import { colors, font } from "@/theme";
-import type { Food } from "@/types";
+import type { Food, FoodPreset } from "@/types";
 
 const PRESETS = [50, 100, 150, 200, 250];
 
@@ -63,6 +63,8 @@ export function GramsSheet() {
   const ger = gu / 100;
   const gmode = geCookable ? state.gMode || "raw" : "raw";
   const geEmoji = geVisObj ? (geFood ? foodEmoji(geFood) : geVisObj.emoji || geVisObj.glyph || "🍽") : "🍽";
+
+  const presetChips: FoodPreset[] = geFood?.presets?.length ? geFood.presets : PRESETS.map((pv) => ({ g: pv }));
 
   const onUncooked = (txt: string) => { const v = parseFloat(txt); patch({ addGrams: isNaN(v) ? 0 : v, gMode: "raw" }); };
   const onCooked = (txt: string) => { const v = parseFloat(txt); patch({ addGrams: isNaN(v) ? 0 : v / geY, gMode: "cooked" }); };
@@ -160,10 +162,17 @@ export function GramsSheet() {
         </View>
       )}
 
-      <View style={{ flexDirection: "row", gap: 7, marginBottom: 18 }}>
-        {PRESETS.map((pv) => (
-          <Pressable key={pv} onPress={() => setPreset(pv)} style={{ flex: 1, paddingVertical: 9, borderRadius: 11, backgroundColor: colors.chip, borderWidth: 1, borderColor: colors.border5, alignItems: "center" }}>
-            <Txt style={{ fontSize: 12.5, fontFamily: font.b, color: colors.subtle }}>{pv}</Txt>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 18 }}>
+        {presetChips.map((pr, i) => (
+          <Pressable key={i} onPress={() => setPreset(pr.g)} style={{ flexGrow: 1, minWidth: 56, paddingVertical: 9, paddingHorizontal: 10, borderRadius: 11, backgroundColor: colors.chip, borderWidth: 1, borderColor: colors.border5, alignItems: "center" }}>
+            {pr.name ? (
+              <>
+                <Txt style={{ fontSize: 12.5, fontFamily: font.b, color: colors.subtle }}>{pr.name}</Txt>
+                <Txt style={{ fontSize: 10.5, fontFamily: font.sb, color: colors.dim, marginTop: 1 }}>{`${pr.g} g`}</Txt>
+              </>
+            ) : (
+              <Txt style={{ fontSize: 12.5, fontFamily: font.b, color: colors.subtle }}>{pr.g}</Txt>
+            )}
           </Pressable>
         ))}
       </View>
