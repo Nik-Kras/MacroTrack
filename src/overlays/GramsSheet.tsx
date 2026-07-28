@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 
 import { BottomSheet } from "@/components/BottomSheet";
@@ -66,6 +66,11 @@ export function GramsSheet() {
 
   const presetChips: FoodPreset[] = geFood?.presets?.length ? geFood.presets : PRESETS.map((pv) => ({ g: pv }));
 
+  // The name the entry would carry without a comment (food/dish name).
+  const baseName = geFood?.name ?? geVisObj?.name ?? geName;
+  // Optional comment shown in the log instead of the food name ("Anything" → "tea with honey").
+  const [note, setNote] = useState(gt === "edit" && editLog && editLog.name !== baseName ? editLog.name : "");
+
   const onUncooked = (txt: string) => { const v = parseFloat(txt); patch({ addGrams: isNaN(v) ? 0 : v, gMode: "raw" }); };
   const onCooked = (txt: string) => { const v = parseFloat(txt); patch({ addGrams: isNaN(v) ? 0 : v / geY, gMode: "cooked" }); };
   const setPreset = (pv: number) => { const ug = gmode === "cooked" ? pv / geY : pv; patch({ addGrams: ug }); };
@@ -77,7 +82,7 @@ export function GramsSheet() {
       const logs = { ...state.logs };
       logs[k] = (logs[k] || []).map((l) =>
         l.id === state.editId
-          ? { ...l, grams: Math.round(state.addGrams), mode: geCookable ? gmode : l.mode, kcal: round(gePer100!.kcal * rr), p: +(gePer100!.p * rr).toFixed(1), c: +(gePer100!.c * rr).toFixed(1), f: +(gePer100!.f * rr).toFixed(1) }
+          ? { ...l, name: note.trim() || baseName, grams: Math.round(state.addGrams), mode: geCookable ? gmode : l.mode, kcal: round(gePer100!.kcal * rr), p: +(gePer100!.p * rr).toFixed(1), c: +(gePer100!.c * rr).toFixed(1), f: +(gePer100!.f * rr).toFixed(1) }
           : l,
       );
       patch({ logs, ov: null, editId: null });
@@ -88,6 +93,7 @@ export function GramsSheet() {
       patch({ dishDraft: { ...dd, ing }, ov: "dishEdit", selFood: null, gIngIdx: null });
     } else if (geFood) {
       const item = logFromFood(geFood, Math.round(state.addGrams), gmode);
+      if (note.trim()) item.name = note.trim();
       patch({ logs: { ...state.logs, [k]: [...(state.logs[k] || []), item] }, ov: null, selFood: null });
     }
   };
@@ -176,6 +182,16 @@ export function GramsSheet() {
           </Pressable>
         ))}
       </View>
+
+      {gt !== "ingredient" && (
+        <TextInput
+          value={note}
+          onChangeText={setNote}
+          placeholder={`Comment (optional) — shows in the log, e.g. "tea with honey"`}
+          placeholderTextColor={colors.dim}
+          style={{ backgroundColor: colors.inset, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 13, color: colors.text, fontFamily: font.b, fontSize: 13.5, marginBottom: 18 }}
+        />
+      )}
 
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 20 }}>
         {macros.map((m) => (
