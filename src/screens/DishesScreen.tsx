@@ -3,7 +3,7 @@ import { Pressable, ScrollView, View } from "react-native";
 
 import { PlusIcon } from "@/components/icons";
 import { Txt, Visual } from "@/components/ui";
-import { dishMacros, round } from "@/lib/nutrition";
+import { dishMacros, effectiveCookedWeight, round } from "@/lib/nutrition";
 import { useStore } from "@/store/store";
 import { colors, font } from "@/theme";
 
@@ -33,10 +33,13 @@ export function DishesScreen() {
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         {state.dishes.map((d) => {
           const m = dishMacros(d, state.foods);
+          // Open ready to log by weight: servings differ portion to portion, so
+          // the sheet starts in cooked-grams mode pre-filled with one serving.
+          const oneServing = Math.round(Math.round(effectiveCookedWeight(d.cookedWeight, m.cooked)) / Math.max(1, d.servings));
           return (
             <Pressable
               key={d.id}
-              onPress={() => open("dish", { selDish: d.id, dishServings: 1, dishLogMode: "servings", dishCookedGrams: 0 })}
+              onPress={() => open("dish", { selDish: d.id, dishServings: 1, dishLogMode: "cooked", dishCookedGrams: oneServing })}
               style={{ width: "47.5%", flexGrow: 1, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border3, borderRadius: 20, overflow: "hidden" }}
             >
               <Visual photo={d.photo} name={d.name} emoji={d.emoji || d.glyph || "🍽"} full height={104} radius={0}>
