@@ -22,7 +22,7 @@ export function StatsScreen() {
   const acc = colors.accent;
 
   const hist = useMemo(() => {
-    const arr: { off: number; kcal: number; p: number; c: number; f: number }[] = [];
+    const arr: { off: number; logged: boolean; kcal: number; p: number; c: number; f: number }[] = [];
     for (let off = -13; off <= 0; off++) {
       const dl = state.logs[dayKey(off)] || [];
       const s = dl.reduce(
@@ -32,17 +32,19 @@ export function StatsScreen() {
         },
         { kcal: 0, p: 0, c: 0, f: 0 },
       );
-      arr.push({ off, kcal: round(s.kcal), p: round(s.p), c: round(s.c), f: round(s.f) });
+      arr.push({ off, logged: dl.length > 0, kcal: round(s.kcal), p: round(s.p), c: round(s.c), f: round(s.f) });
     }
     return arr;
   }, [state.logs, state.foods, state.dishes]);
 
   const nDays = state.statsSpan === "day" ? 1 : state.statsSpan === "week" ? 7 : 14;
-  const slice = hist.slice(-nDays);
-  const netData = slice.map((h) => ({ net: h.kcal - t.cal }));
-  const avgNet = Math.round(netData.reduce((a, d) => a + d.net, 0) / netData.length);
-  const spanLabel = spanMeta.find((s) => s.k === state.statsSpan)!.l.toLowerCase() + (nDays > 1 ? ` · ${nDays} days` : "");
-  const avg = (k: "p" | "c" | "f") => Math.round(slice.reduce((a, h) => a + h[k], 0) / slice.length);
+  // Days without a single log entry are excluded: an untouched day (like today
+  // before breakfast) is not a 0-kcal day and must not drag the averages.
+  const logged = hist.slice(-nDays).filter((h) => h.logged);
+  const netData = logged.map((h) => ({ net: h.kcal - t.cal }));
+  const avgNet = netData.length ? Math.round(netData.reduce((a, d) => a + d.net, 0) / netData.length) : 0;
+  const spanLabel = spanMeta.find((s) => s.k === state.statsSpan)!.l.toLowerCase() + (nDays > 1 ? ` · ${logged.length} of ${nDays} days logged` : "");
+  const avg = (k: "p" | "c" | "f") => (logged.length ? Math.round(logged.reduce((a, h) => a + h[k], 0) / logged.length) : 0);
 
   const weightSeries = metricSeries(state.measurements, "weight");
   const weightChart = weightSeries.map((m) => ({ date: m.date, value: m.value }));
@@ -83,12 +85,20 @@ export function StatsScreen() {
       <View style={{ backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 22, padding: 18, marginBottom: 14 }}>
         <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 4 }}>
           <Txt style={{ fontSize: 13, fontFamily: font.b, color: colors.muted }}>Energy balance</Txt>
-          <Txt style={{ fontSize: 12, fontFamily: font.b, color: avgNet <= 0 ? acc : colors.over }}>
-            {`${avgNet <= 0 ? avgNet : "+" + avgNet} kcal / day`}
-          </Txt>
+          {netData.length > 0 && (
+            <Txt style={{ fontSize: 12, fontFamily: font.b, color: avgNet <= 0 ? acc : colors.over }}>
+              {`${avgNet <= 0 ? avgNet : "+" + avgNet} kcal / day`}
+            </Txt>
+          )}
         </View>
         <Txt style={{ fontSize: 11.5, color: colors.dim, fontFamily: font.sb, marginBottom: 14 }}>{`Intake vs target · ${spanLabel}`}</Txt>
-        <NetChart data={netData} acc={acc} />
+        {netData.length > 0 ? (
+          <NetChart data={netData} acc={acc} />
+        ) : (
+          <View style={{ height: 130, alignItems: "center", justifyContent: "center" }}>
+            <Txt style={{ fontSize: 13, color: colors.muted, fontFamily: font.b }}>Log a meal to see your balance</Txt>
+          </View>
+        )}
       </View>
 
       {/* macro averages */}
