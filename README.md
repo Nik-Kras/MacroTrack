@@ -21,9 +21,11 @@ Scan with the phone camera (or open
 open the downloaded file and tap **Install**. Later versions: the app shows **Update available · Update** on the
 Nutrition screen; Update downloads the new APK the same way and installs it over the old one, keeping your data.
 
-**Moving from Expo Go** (one time — Expo Go keeps its data inside Expo Go): in Expo Go open Profile → **Export
-backup** and save the file (e.g. to Downloads or Drive); install the APK; in the installed app open Profile →
-**Import backup** and pick that file.
+**Moving from an EAS build or Expo Go** (one time): the earlier MacroTrack APKs were built by Expo EAS and signed
+with Expo's key; this one is signed with the project's own key, and Android refuses to install an app over one with
+the same name but another key ("App not installed"). So: in the old app open Profile → **Export backup** and save
+the file (e.g. Drive or Telegram); **uninstall** the old MacroTrack; install the APK; open Profile → **Restore backup**
+and pick that file. From then on, updates install over it with the data kept.
 
 ## Photo logging (on-device AI)
 
