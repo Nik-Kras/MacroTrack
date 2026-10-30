@@ -103,3 +103,21 @@ GH_TOKEN=$(gh auth token --user Nik-Kras) gh release create vX.Y.Z /tmp/MacroTra
 The asset must be named `MacroTrack.apk`: the README QR (`pnpm qr` redraws it) and the in-app update check both use
 the latest release.
 
+## Crash reports
+
+Release builds send crash reports to Sentry (EU region, org `mykyta-krasnytskyi`, project `macrotrack`), as in RHP
+and MamaKcal. Technical data only: no food names, weights, photos, IP, screenshots or tap breadcrumbs. Profile →
+**Send crash reports** switches them off (on by default) and shows the **session code** (Sentry tag `session`) to
+find a report. `src/diag/` holds the setup and a black box that, on the next start, reports a kill in the middle of
+loading or running the photo model; model load/run times show up as `model.load` / `model.describe` spans.
+
+- DSN: `.env.production` (a DSN can only send events, so it's committed).
+- Source maps: `pnpm release:android` reads `SENTRY_AUTH_TOKEN` from the git-ignored `.env.sentry-build-plugin`.
+- Check that reporting works: `adb shell am start -a android.intent.action.VIEW -d macrotrack://sentry-test` throws
+  "MacroTrack Sentry verification error".
+
+## App icon
+
+A strawberry on a kitchen scale, nervously watching the macro readout. Drawn as SVG in `scripts/render-icons.mjs`
+(`pnpm icons` writes `assets/`).
+

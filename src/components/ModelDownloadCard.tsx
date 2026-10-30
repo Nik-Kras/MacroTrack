@@ -3,6 +3,7 @@ import { ActivityIndicator, AppState, Pressable, View } from "react-native";
 
 import { LiteRtLm, type ModelDownloadStatus } from "../../modules/litert-lm";
 import { Txt } from "@/components/ui";
+import { record, reportError } from "@/diag/diagnostics";
 import { downloadShare, gb, MODEL_BYTES, MODEL_PARTS, MODEL_SHA256 } from "@/lib/ai/modelFiles";
 import { colors, font } from "@/theme";
 
@@ -19,24 +20,32 @@ export function ModelDownloadCard({ onReady }: { onReady: () => void }) {
   const [needBytes, setNeedBytes] = useState(0);
   const [starting, setStarting] = useState(false);
   const finishing = useRef(false);
+  const reported = useRef<string | null>(null);
 
   const poll = useCallback(async () => {
     if (!native) return;
     try {
       const s = await native.modelDownloadStatus();
       setStatus(s);
+      if (s.state === "failed" && reported.current !== s.reason) {
+        reported.current = s.reason ?? "failed";
+        reportError(new Error(`Model download failed: ${s.reason}`), "model.download", { reason: s.reason ?? null });
+      }
       if (s.state === "downloaded" && !finishing.current) {
         finishing.current = true;
         setStatus({ ...s, state: "assembling" });
+        record("model.download.join");
         try {
           await native.finishModelDownload();
+        } catch (e) {
+          reportError(e, "model.download.join");
         } finally {
           finishing.current = false;
         }
         setStatus(await native.modelDownloadStatus());
       }
     } catch (e) {
-      console.warn("[MacroTrack] model download status", e);
+      reportError(e, "model.download.status");
     }
   }, [native]);
 
@@ -62,11 +71,13 @@ export function ModelDownloadCard({ onReady }: { onReady: () => void }) {
     if (!native || starting) return;
     setStarting(true);
     setNeedBytes(0);
+    reported.current = null;
     try {
+      record("model.download.start");
       setNeedBytes(await native.startModelDownload(MODEL_PARTS, MODEL_SHA256));
       await poll();
     } catch (e) {
-      console.warn("[MacroTrack] model download start", e);
+      reportError(e, "model.download.start");
       setStatus({ state: "failed", done: 0, total: MODEL_BYTES, reason: "start" });
     } finally {
       setStarting(false);

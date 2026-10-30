@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, View } from "react-native";
+import { ActivityIndicator, Alert, Pressable, ScrollView, Switch, View } from "react-native";
 
 import { Spark } from "@/components/Charts";
 import { StatsIcon } from "@/components/icons";
@@ -7,6 +7,7 @@ import { Txt, Visual } from "@/components/ui";
 import { GOAL, MC } from "@/data/seed";
 import { METRICS, defaultMetricValue, metricDelta, metricSeries } from "@/lib/body";
 import { staleMetrics } from "@/lib/measureReminder";
+import { crashReportsOn, reportError, sessionCode, setCrashReports } from "@/diag/diagnostics";
 import { exportBackup, importBackup } from "@/lib/backup";
 import { useStore, useTargets } from "@/store/store";
 import { colors, font } from "@/theme";
@@ -18,6 +19,7 @@ export function ProfileScreen() {
   const P = state.profile;
   const acc = colors.accent;
   const [busy, setBusy] = useState<null | "export" | "import">(null);
+  const [reportsOn, setReportsOn] = useState(crashReportsOn);
 
   const openDetail = (metric: MetricKey) => patch({ screen: "measureDetail", detailMetric: metric });
   const logMeasurement = (metric: MetricKey) =>
@@ -33,8 +35,10 @@ export function ProfileScreen() {
         foods: state.foods,
         dishes: state.dishes,
         measurements: state.measurements,
+        learned: state.learned,
       });
     } catch (e: any) {
+      reportError(e, "backup.export");
       Alert.alert("Export failed", e?.message || "Could not create the backup file.");
     } finally {
       setBusy(null);
@@ -49,6 +53,7 @@ export function ProfileScreen() {
       restore(data);
       Alert.alert("Restore complete", "Your data has been restored from the backup.");
     } catch (e: any) {
+      reportError(e, "backup.restore");
       Alert.alert("Restore failed", e?.message || "Could not read that backup file.");
     } finally {
       setBusy(null);
@@ -223,6 +228,29 @@ export function ProfileScreen() {
             <Txt style={{ fontSize: 14, fontFamily: font.b, color: colors.subtle }}>Restore backup</Txt>
           )}
         </Pressable>
+      </View>
+
+      {/* diagnostics: crash reports (as in RHP) */}
+      <View style={{ marginTop: 24, backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.border2, borderRadius: 16, padding: 15, gap: 8 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Txt style={{ fontSize: 14.5, fontFamily: font.b }}>Send crash reports</Txt>
+            <Txt style={{ fontSize: 12, color: colors.muted, fontFamily: font.sb, marginTop: 3, lineHeight: 17 }}>
+              Technical data only: phone model, Android version, the step where something failed. No food, weight or other personal data.
+            </Txt>
+          </View>
+          <Switch
+            value={reportsOn}
+            onValueChange={(on) => {
+              setCrashReports(on);
+              setReportsOn(on);
+            }}
+            trackColor={{ false: colors.track, true: acc + "88" }}
+            thumbColor={reportsOn ? acc : colors.muted}
+            accessibilityLabel="Send crash reports"
+          />
+        </View>
+        <Txt selectable style={{ fontSize: 11.5, color: colors.dim, fontFamily: font.sb }}>{`Session code: ${sessionCode()}`}</Txt>
       </View>
     </ScrollView>
   );

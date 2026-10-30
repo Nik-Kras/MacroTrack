@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AppState as RNAppState } from "react-native";
 
+import { record, reportError } from "@/diag/diagnostics";
+
 import { loadState, saveState, type PersistShape } from "./persistence";
 
 import {
@@ -231,6 +233,7 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
       } catch (e) {
         // Corrupt/unreadable store — fall back to seed (already in state).
         console.warn("[MacroTrack] load failed, using seed data:", e);
+        reportError(e, "store.load");
       } finally {
         if (active) setHydrated(true);
       }
@@ -251,6 +254,7 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
         await saveState(data);
       } catch (e2) {
         console.error("[MacroTrack] failed to persist data:", e2 || e);
+        reportError(e2 || e, "store.save");
       }
     }
   }, []);
@@ -398,7 +402,8 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
           let uri: string;
           try {
             uri = await prepareMealPhoto(src, width, height);
-          } catch {
+          } catch (e) {
+            reportError(e, "photo.prepare", { width, height });
             setState((s) => (s.photo?.id === id ? { ...s, photo: { ...s.photo, status: "failed" } } : s));
             return;
           }
@@ -429,6 +434,7 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
           if (!s.photo) return s;
           const entries = photoEntries(s.photo.items, s.foods, s.dayOffset);
           if (!entries.length) return s;
+          record("photo.logged", { lines: entries.length, corrected: s.photo.items.filter((i) => i.aiFoodId !== i.foodId).length });
           const k = dayKey(s.dayOffset);
           return {
             ...s,

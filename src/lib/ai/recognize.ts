@@ -1,4 +1,5 @@
 import { LiteRtLm } from "../../../modules/litert-lm";
+import { record, reportError, risky, span } from "@/diag/diagnostics";
 
 import type { Matcher } from "./match";
 import { PROMPT, toItems, type Recognition } from "./recognition";
@@ -47,8 +48,9 @@ export function warmUp(): void {
   if (!native || !modelReady()) return;
   // Each visit tries again: a failure may have been memory pressure, not the file.
   loadFailed = false;
-  native.warmUp().catch((e) => {
+  void risky("model.load", () => span("model.load", "ai.load", () => native.warmUp())).catch((e) => {
     if (isLoadFailure(e)) loadFailed = true;
+    reportError(e, "model.load");
   });
 }
 
@@ -70,23 +72,36 @@ export async function recognizeMeal(photoUri: string, matcher: Matcher, makeKey:
   if (loadFailed) throw new RecognizeFailure("failed");
 
   const requestId = ++requestSeq;
+  const started = Date.now();
   const onAbort = () => native.cancel(requestId);
   signal.addEventListener("abort", onAbort);
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const raw = await Promise.race([
-      native.describe(requestId, photoUri.replace(/^file:\/\//, ""), PROMPT),
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          native.cancel(requestId);
-          reject(new Error("timed out"));
-        }, TIMEOUT_MS);
-      }),
-    ]);
-    return toItems(raw, matcher, makeKey);
+    const raw = await risky("model.describe", () =>
+      span("model.describe", "ai.run", () =>
+        Promise.race([
+          native.describe(requestId, photoUri.replace(/^file:\/\//, ""), PROMPT),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => {
+              native.cancel(requestId);
+              reject(new Error(`model.describe timed out after ${TIMEOUT_MS / 1000} s`));
+            }, TIMEOUT_MS);
+          }),
+        ]),
+      ),
+    );
+    const r = toItems(raw, matcher, makeKey);
+    // Counts only: food names stay on the phone.
+    record("model.describe.done", { ms: Date.now() - started, lines: r.items.length, unknown: r.items.filter((i) => i.unknown).length });
+    return r;
   } catch (e) {
     if (isLoadFailure(e)) loadFailed = true;
-    if (!signal.aborted) console.warn("[MacroTrack] on-device model failed", e);
+    if (signal.aborted) {
+      record("model.describe.cancelled");
+    } else {
+      console.warn("[MacroTrack] on-device model failed", e);
+      reportError(e, "model.describe", { ms: Date.now() - started });
+    }
     throw new RecognizeFailure("failed");
   } finally {
     clearTimeout(timer);

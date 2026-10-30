@@ -12,3 +12,6 @@ expo-env.d.ts
 
 # build output of local native modules
 modules/*/android/build/
+
+# Sentry upload token (organization token) - never commit
+.env.sentry-build-plugin
