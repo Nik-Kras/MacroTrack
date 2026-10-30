@@ -18,7 +18,8 @@
       },
       "permissions": [
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "versionCode": 1
     },
     "androidStatusBar": {
       "barStyle": "light-content",
@@ -26,12 +27,28 @@
     },
     "plugins": [
       [
-        "expo-image-picker",
+        "expo-build-properties",
         {
-          "photosPermission": "MacroTrack uses your photos to attach images to dishes and logged foods."
+          "android": {
+            "kotlinVersion": "2.2.20"
+          }
         }
       ],
-      "expo-sqlite"
+      [
+        "./plugins/withKotlinGradlePlugin",
+        {
+          "version": "2.2.20"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MacroTrack uses your photos to attach images to dishes and logged foods, and to recognise food in a photo.",
+          "cameraPermission": "MacroTrack uses the camera to photograph a meal so it can list the foods on the plate."
+        }
+      ],
+      "expo-sqlite",
+      "./plugins/withReleaseSigning"
     ],
     "extra": {
       "eas": {

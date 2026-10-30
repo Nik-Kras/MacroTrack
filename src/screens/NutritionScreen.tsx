@@ -4,6 +4,7 @@ import { Pressable, ScrollView, View } from "react-native";
 import { Ring } from "@/components/Charts";
 import { CalendarIcon } from "@/components/icons";
 import { MacroBar, SectionHeader, Txt, Visual } from "@/components/ui";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import { CATMETA, MC } from "@/data/seed";
 import {
   dateForOffset,
@@ -134,6 +135,7 @@ export function NutritionScreen() {
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 8, paddingBottom: 130 }}
     >
+      <UpdateBanner />
       {/* header */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6, marginBottom: 18 }}>
         <View>

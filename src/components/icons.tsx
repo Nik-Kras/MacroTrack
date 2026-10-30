@@ -75,3 +75,18 @@ export const StatsIcon = ({ size = 17, color = colors.muted }: IP) => (
     <Path d="M4 19V5M4 19h16M8 16v-4M13 16V8M18 16v-7" stroke={color} strokeWidth={2} strokeLinecap="round" />
   </Svg>
 );
+
+export const CameraIcon = ({ size = 20, color = colors.muted }: IP) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.7l1.3-2h5l1.3 2h1.7A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-8Z" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
+    <Circle cx={12} cy={12.5} r={3.4} stroke={color} strokeWidth={1.8} />
+  </Svg>
+);
+
+export const GalleryIcon = ({ size = 20, color = colors.muted }: IP) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Rect x={4} y={5} width={16} height={14} rx={2.5} stroke={color} strokeWidth={1.8} />
+    <Circle cx={9} cy={10} r={1.6} stroke={color} strokeWidth={1.6} />
+    <Path d="m5 17 4.5-4.5 3 3 2.5-2.5L19 17" stroke={color} strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round" />
+  </Svg>
+);

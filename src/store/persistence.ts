@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SQLite from "expo-sqlite";
 
+import type { Correction } from "@/lib/ai/learn";
 import { migrateShapePhotos } from "@/lib/photo";
 import type { Dish, Food, LogMap, Measurement, Profile } from "@/types";
 
@@ -14,6 +15,8 @@ export interface PersistShape {
   foods: Food[];
   dishes: Dish[];
   measurements: Measurement[];
+  /** Photo recognition: what the model calls a food → the user's food, learned from their corrections. */
+  learned?: Record<string, Correction>;
 }
 
 const DB_NAME = "macrotrack.db";
@@ -69,6 +72,7 @@ function parseShape(raw: string | null): PersistShape | null {
     foods: (data.foods ?? []) as Food[],
     dishes: (data.dishes ?? []) as Dish[],
     measurements: (data.measurements ?? []) as Measurement[],
+    learned: data.learned && typeof data.learned === "object" ? data.learned : {},
   };
 }
 

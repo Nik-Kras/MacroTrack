@@ -12,6 +12,7 @@ import { FoodEditorSheet } from "@/overlays/FoodEditorSheet";
 import { GramsSheet } from "@/overlays/GramsSheet";
 import { MeasureSheet } from "@/overlays/MeasureSheet";
 import { OnboardingSheet } from "@/overlays/OnboardingSheet";
+import { PhotoSheet } from "@/overlays/PhotoSheet";
 import { DishesScreen } from "@/screens/DishesScreen";
 import { MeasureDetailScreen } from "@/screens/MeasureDetailScreen";
 import { NutritionScreen } from "@/screens/NutritionScreen";
@@ -101,6 +102,7 @@ function Overlays() {
     case "measure": return <MeasureSheet />;
     case "foodEdit": return <FoodEditorSheet />;
     case "dishEdit": return <DishBuilderSheet />;
+    case "photo": return <PhotoSheet />;
     default: return null;
   }
 }

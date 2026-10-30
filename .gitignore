@@ -5,7 +5,10 @@ dist-verify/
 web-build/
 *.log
 .DS_Store
-android/
-ios/
+/android/
+/ios/
 *.orig.*
 expo-env.d.ts
+
+# build output of local native modules
+modules/*/android/build/

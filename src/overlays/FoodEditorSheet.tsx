@@ -9,6 +9,7 @@ import { pickPhoto } from "@/lib/photo";
 import { deleteFood, saveFood } from "@/overlays/editorActions";
 import { useSubmitGuard } from "@/lib/useSubmitGuard";
 import { useStore } from "@/store/store";
+import { applyPhotoPick } from "@/overlays/PhotoSheet";
 import { colors, font } from "@/theme";
 
 export function FoodEditorSheet() {
@@ -33,7 +34,11 @@ export function FoodEditorSheet() {
   const close = () => patch({ ov: "addFood", foodDraft: null });
   const onSave = () => {
     const saved = saveFood(store);
-    if (FD.fromDish) {
+    if (state.searchMode === "photo" && state.photoPick) {
+      // Created while fixing a meal photo: the new food goes straight into that line.
+      patch({ foodDraft: null });
+      applyPhotoPick(store, saved.id);
+    } else if (FD.fromDish) {
       const d = state.dishDraft || { id: null, name: "", servings: 2, emoji: "🍽", photo: "", ing: [] };
       patch({ dishDraft: d, ov: "grams", gTarget: "ingredient", selFood: saved.id, addGrams: 100, gMode: "raw", gIngIdx: d.ing.length, searchMode: "log", foodDraft: null });
     } else {

@@ -407,6 +407,10 @@ Patterns borrowed from MyFitnessPal, layered on the **Bring** north star (clean 
   - **Friend onboarding:** install the **TestFlight app** from the App Store → tap the invite link → install MacroTrack. No Apple Developer account needed on their side.
   - **Cadence:** TestFlight builds **expire after 90 days**, so plan a rebuild + resubmit roughly every ~90 days to keep testers running.
 - App stores (full public listing) are **out of scope** for v1.
+- **Android, since 2026-10-30:** a release APK signed with the project's own key (`pnpm release:android`,
+  keystore `~/.android/macrotrack-release.jks`) is attached to a GitHub release of this public repo as
+  `MacroTrack.apk`. The README's QR installs it, and the app shows **Update available · Update** when a newer
+  release exists. The on-device photo model needs this real APK (it can't run in Expo Go).
 
 ---
 
@@ -596,12 +600,32 @@ Rounding: display whole grams/kcal; round half up.
 
 ---
 
+### Photo logging (on-device AI) — `AC-AI`
+
+Photograph a meal; a model **on the phone** (Gemma 3n E2B through Google's LiteRT-LM, the same as in the
+MamaKcal app, which benchmarked it) lists the foods with estimated grams, matched onto **the user's own food
+list — seed and custom foods**. Custom foods named in Ukrainian are found through MamaKcal's Ukrainian↔English
+food list; corrections are learned after the same fix twice. Nothing leaves the phone; the 3.7 GB model is
+downloaded once in the app (Wi‑Fi, Android DownloadManager).
+
+- **AC-AI-1** — GIVEN Add food · WHEN the camera (or gallery) button is used · THEN the photo is recognised on the
+  phone and a review sheet lists each food from the user's list with its grams as served, kcal and macros.
+- **AC-AI-2** — GIVEN a review line · THEN its food can be swapped (suggested foods first, any food or a new custom
+  food), its grams edited, or the line removed; foods can be added; a name that fits none of the user's foods is
+  an *unknown* line that must be resolved or removed before logging.
+- **AC-AI-3** — GIVEN a cookable food (yield factor) · THEN the photo's grams are its cooked weight and the entry is
+  logged by cooked weight.
+- **AC-AI-4** — WHEN **Log meal** is tapped · THEN all lines are logged with one timestamp, so the day log shows
+  them as one meal; the same correction made twice changes later matches.
+- **AC-AI-5** — GIVEN the model isn't on the phone · WHEN a photo is taken · THEN the sheet offers the download
+  (size, Wi‑Fi only, progress, resumable) instead of failing.
+
 ## Out of scope (v1)
 
 - User accounts, login, multi-device sync.
 - Cloud backup (nice-to-have, low priority — may revisit).
 - Any social/sharing features beyond text/CSV export.
-- AI photo or natural-language food estimation.
+- Natural-language food estimation (AI photo logging is in scope since 2026-10-30: see *Photo logging*).
 - In-app coaching/feedback or recommendations beyond goal-derived targets.
 - Monetization, ads, subscriptions.
 - Imperial units (kg/cm only).

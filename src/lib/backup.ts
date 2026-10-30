@@ -94,6 +94,7 @@ function normalize(data: Partial<PersistShape>): PersistShape | null {
     foods: data.foods ?? [],
     dishes: data.dishes ?? [],
     measurements: data.measurements ?? [],
+    learned: data.learned && typeof data.learned === "object" ? data.learned : {},
   };
 }
 

@@ -2,7 +2,7 @@ import type { FoodDraft, OverlayKey } from "@/store/store";
 import type { Dish, Food, FoodPreset } from "@/types";
 
 interface StoreLike {
-  state: { foods: Food[]; dishes: Dish[]; ov: OverlayKey | null; searchMode: "log" | "dish"; dishDraft: any; foodDraft: FoodDraft | null };
+  state: { foods: Food[]; dishes: Dish[]; ov: OverlayKey | null; searchMode: "log" | "dish" | "photo"; dishDraft: any; foodDraft: FoodDraft | null };
   patch: (p: any) => void;
 }
 
