@@ -11,6 +11,7 @@ import type {
   Dish,
   Food,
   LogEntry,
+  Macros,
   Profile,
   Targets,
 } from "@/types";
@@ -37,6 +38,58 @@ export function weightLabel(food: Food | undefined, gUncooked: number, mode: Coo
   if (!isCookable(food)) return `${gUncooked} g`;
   if (mode === "cooked") return `${Math.round(toCooked(food!, gUncooked))} g cooked`;
   return `${gUncooked} g raw`;
+}
+
+// ---- pieces: foods counted by the item ----
+/** Entered per item without its weight: counted in pieces only. */
+export const piecesOnly = (food?: Food) => !!food?.item && !food.pieceG;
+/** Can be logged in pieces: entered per item, or has an item weight. */
+export const countable = (food?: Food) => !!food && (!!food.item || !!food.pieceG);
+
+/** The values for one item: as entered, or per 100 g scaled to the item weight; null when it can't be counted. */
+export function itemValues(food: Food): Macros | null {
+  if (food.item) return food.item;
+  return food.pieceG ? scaleMacros(food, food.pieceG / 100) : null;
+}
+
+export function scaleMacros(m: Macros, factor: number): Macros {
+  return { kcal: m.kcal * factor, p: m.p * factor, c: m.c * factor, f: m.f * factor };
+}
+
+/** As stored on an entry: whole kcal, macros to 0.1 g. */
+export function roundMacros(m: Macros): Macros {
+  return { kcal: round(m.kcal), p: +m.p.toFixed(1), c: +m.c.toFixed(1), f: +m.f.toFixed(1) };
+}
+
+/** "1.5" pieces, at most two decimals. */
+export const fmtPieces = (n: number) => String(+n.toFixed(2));
+
+/** A count she typed ("2", "1.5", "1,5"); null when it isn't usable. */
+export function parsePieces(text: string): number | null {
+  const n = parseFloat(text.replace(",", "."));
+  return Number.isFinite(n) && n > 0 && n <= 100 ? n : null;
+}
+
+/** How the amount sheet opens: 1 piece for a countable food, unless it was last logged in grams. */
+export const startPieces = (food: Food): number | null => (piecesOnly(food) || (countable(food) && food.unit !== "g") ? 1 : null);
+
+/** "450 kcal · P20 C45 F18 / pc" or "… /100g". */
+export function foodSummary(food: Food) {
+  const { m, per } = shownValues(food);
+  const r1 = (x: number) => +x.toFixed(1);
+  return `${round(m.kcal)} kcal · P${r1(m.p)} C${r1(m.c)} F${r1(m.f)} ${per === "pc" ? "/ pc" : "/100g"}`;
+}
+
+/** What a food's values are shown for: one item when it was entered that way, else 100 g. */
+export function shownValues(food: Food): { m: Macros; per: "pc" | "100g" } {
+  return food.item ? { m: food.item, per: "pc" } : { m: food, per: "100g" };
+}
+
+/** How much was logged: "2 pcs · 110 g", "1 pc", or the weight. */
+export function amountLabel(e: LogEntry, food: Food | undefined) {
+  if (e.pieces == null) return weightLabel(food, e.grams, e.mode);
+  const g = food?.pieceG ? Math.round(e.pieces * food.pieceG) : e.grams;
+  return `${fmtPieces(e.pieces)} ${e.pieces === 1 ? "pc" : "pcs"}${g > 0 ? ` · ${g} g` : ""}`;
 }
 
 // ---- dates (offset from BASE_DATE) ----
@@ -69,7 +122,6 @@ export function offsetForKey(key: string) {
 
 // ---- macro math ----
 export function logFromFood(food: Food, grams: number, mode?: CookMode): LogEntry {
-  const r = grams / 100;
   return {
     id: "l" + Math.random().toString(36).slice(2, 8),
     kind: "food",
@@ -77,11 +129,18 @@ export function logFromFood(food: Food, grams: number, mode?: CookMode): LogEntr
     name: food.name,
     grams,
     mode: food.cookable ? mode || "raw" : "na",
-    kcal: round(food.kcal * r),
-    p: +(food.p * r).toFixed(1),
-    c: +(food.c * r).toFixed(1),
-    f: +(food.f * r).toFixed(1),
+    ...roundMacros(scaleMacros(food, grams / 100)),
     cat: food.cats[0],
+  };
+}
+
+/** Log a food by count; its grams are the pieces × the item weight (uncooked), or 0 without one. */
+export function logPieces(food: Food, pieces: number): LogEntry {
+  const one = itemValues(food) ?? { kcal: 0, p: 0, c: 0, f: 0 };
+  return {
+    ...logFromFood(food, food.pieceG ? Math.round(pieces * food.pieceG) : 0, "raw"),
+    ...roundMacros(scaleMacros(one, pieces)),
+    pieces,
   };
 }
 
@@ -148,13 +207,12 @@ export function entryMacros(
   if (e.kind === "food") {
     const fo = findFood(foods, e.foodId);
     if (!fo) return snapshot;
-    const r = e.grams / 100;
-    return {
-      kcal: round(fo.kcal * r),
-      p: +(fo.p * r).toFixed(1),
-      c: +(fo.c * r).toFixed(1),
-      f: +(fo.f * r).toFixed(1),
-    };
+    // Logged by count: the count stays, whatever the item weighs now.
+    const one = e.pieces != null ? itemValues(fo) : null;
+    if (one) return roundMacros(scaleMacros(one, e.pieces!));
+    // A food that is now counted in pieces only has no per-100 g values to scale.
+    if (piecesOnly(fo) || !(e.grams > 0)) return snapshot;
+    return roundMacros(scaleMacros(fo, e.grams / 100));
   }
   const d = findDish(dishes, e.dishId);
   if (!d) return snapshot;

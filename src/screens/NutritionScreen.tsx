@@ -7,6 +7,7 @@ import { MacroBar, SectionHeader, Txt, Visual } from "@/components/ui";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { CATMETA, MC } from "@/data/seed";
 import {
+  amountLabel,
   dateForOffset,
   dayKey,
   entryMacros,
@@ -14,7 +15,6 @@ import {
   findFood,
   glyphForLog,
   round,
-  weightLabel,
 } from "@/lib/nutrition";
 import { groupDayLog, type MacroTotals } from "@/lib/mealGroups";
 import { useStore, useTargets } from "@/store/store";
@@ -36,7 +36,7 @@ function LogRow({ entry: l, foods, dishes, onEdit, inGroup }: {
   inGroup?: boolean;
 }) {
   const obj = l.kind === "dish" ? findDish(dishes, l.dishId) : findFood(foods, l.foodId);
-  const wlab = l.kind === "dish" ? `${l.grams} g` : weightLabel(findFood(foods, l.foodId), l.grams, l.mode);
+  const wlab = l.kind === "dish" ? `${l.grams} g` : amountLabel(l, findFood(foods, l.foodId));
   const m = entryMacros(l, foods, dishes);
   return (
     <Pressable
@@ -128,7 +128,7 @@ export function NutritionScreen() {
   ];
 
   const editLog = (l: LogEntry) =>
-    patch({ ov: "grams", gTarget: "edit", editId: l.id, addGrams: l.grams, gMode: l.mode === "cooked" ? "cooked" : "raw", selFood: l.kind === "food" ? l.foodId ?? null : null });
+    patch({ ov: "grams", gTarget: "edit", editId: l.id, addGrams: l.grams, addPieces: l.pieces ?? null, gMode: l.mode === "cooked" ? "cooked" : "raw", selFood: l.kind === "food" ? l.foodId ?? null : null });
 
   return (
     <ScrollView

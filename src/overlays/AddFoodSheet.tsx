@@ -5,7 +5,7 @@ import { BottomSheet } from "@/components/BottomSheet";
 import { EditIcon, PlusIcon, SearchIcon } from "@/components/icons";
 import { Txt, Visual } from "@/components/ui";
 import { CATMETA } from "@/data/seed";
-import { foodEmoji } from "@/lib/nutrition";
+import { foodEmoji, foodSummary, piecesOnly, shownValues, startPieces } from "@/lib/nutrition";
 import { openFoodEditor } from "@/overlays/editorActions";
 import { applyPhotoPick, PhotoButtons } from "@/overlays/PhotoSheet";
 import { useStore } from "@/store/store";
@@ -19,11 +19,12 @@ export function AddFoodSheet() {
 
   const addCatList = [{ key: "all", label: "All" }, ...CATMETA.map((c) => ({ key: c.key, label: c.label }))];
   const q = state.addSearch.trim().toLowerCase();
-  let results = state.foods.filter((f) => state.addCat === "all" || f.cats.includes(state.addCat as any));
-  if (q) results = state.foods.filter((f) => f.name.toLowerCase().includes(q));
-
   // Picking a food for a line of a meal photo: suggestions first, and Close goes back to the photo.
   const forPhoto = state.searchMode === "photo";
+  // Dishes and meal photos are weighed: foods counted in pieces only can't go there.
+  const pool = state.searchMode === "log" ? state.foods : state.foods.filter((f) => !piecesOnly(f));
+  let results = pool.filter((f) => state.addCat === "all" || f.cats.includes(state.addCat as any));
+  if (q) results = pool.filter((f) => f.name.toLowerCase().includes(q));
   const suggested = forPhoto && state.photoPick && !q ? store.photoSuggestions(state.photoPick) : [];
   const shut = forPhoto ? () => patch({ ov: "photo", photoPick: null, searchMode: "log", addSearch: "" }) : close;
 
@@ -33,9 +34,9 @@ export function AddFoodSheet() {
     } else if (state.searchMode === "dish") {
       // pick grams first; GramsSheet appends the ingredient at gIngIdx on confirm
       const d = state.dishDraft || { id: null, name: "", servings: 2, emoji: "🍽", photo: "", ing: [] };
-      patch({ dishDraft: d, ov: "grams", gTarget: "ingredient", selFood: f.id, addGrams: 100, gMode: "raw", gIngIdx: d.ing.length, searchMode: "log" });
+      patch({ dishDraft: d, ov: "grams", gTarget: "ingredient", selFood: f.id, addGrams: 100, addPieces: null, gMode: "raw", gIngIdx: d.ing.length, searchMode: "log" });
     } else {
-      open("grams", { selFood: f.id, addGrams: 100, gTarget: "log", gMode: "raw" });
+      open("grams", { selFood: f.id, addGrams: 100, addPieces: startPieces(f), gTarget: "log", gMode: "raw" });
     }
   };
 
@@ -102,7 +103,7 @@ export function AddFoodSheet() {
             <Visual photo={f.photo} name={f.name} emoji={foodEmoji(f)} size={38} radius={11} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Txt numberOfLines={1} style={{ fontSize: 14.5, fontFamily: font.b }}>{f.name}</Txt>
-              <Txt numberOfLines={1} style={{ fontSize: 11.5, color: colors.muted, fontFamily: font.sb, marginTop: 2 }}>{`${f.kcal} kcal · P${f.p} C${f.c} F${f.f} /100g`}</Txt>
+              <Txt numberOfLines={1} style={{ fontSize: 11.5, color: colors.muted, fontFamily: font.sb, marginTop: 2 }}>{foodSummary(f)}</Txt>
             </View>
           </Pressable>
         ))}
@@ -118,10 +119,10 @@ export function AddFoodSheet() {
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Txt numberOfLines={1} style={{ fontSize: 14.5, fontFamily: font.b }}>{f.name}</Txt>
                 <Txt numberOfLines={1} style={{ fontSize: 11.5, color: colors.muted, fontFamily: font.sb, marginTop: 2 }}>
-                  {`${f.kcal} kcal · P${f.p} C${f.c} F${f.f} /100g${f.custom ? " · Custom" : ""}`}
+                  {`${foodSummary(f)}${f.custom ? " · Custom" : ""}`}
                 </Txt>
               </View>
-              <Txt style={{ fontSize: 13, fontFamily: font.xb, color: colors.subtle }}>{f.kcal}</Txt>
+              <Txt style={{ fontSize: 13, fontFamily: font.xb, color: colors.subtle }}>{Math.round(shownValues(f).m.kcal)}</Txt>
             </Pressable>
             <Pressable onPress={() => openFoodEditor(store, f)} style={{ width: 34, height: 34, borderRadius: 99, backgroundColor: colors.chip, borderWidth: 1, borderColor: colors.border5, alignItems: "center", justifyContent: "center", marginRight: 2 }}>
               <EditIcon />

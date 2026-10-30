@@ -486,6 +486,16 @@ Rounding: display whole grams/kcal; round half up.
   quick-edit for grams opens and saving updates totals immediately.
 - **AC-NL-4** — GIVEN a logged entry · WHEN it is removed · THEN today's totals decrement by
   exactly that entry's macros.
+- **AC-NL-5 (per item)** — GIVEN a custom food entered **per item** as 437 kcal / 19 g P / 45 g C /
+  20 g F with one item weighing 173 g · THEN it is stored per 100 g as 252.6 kcal / 10.98 / 26.01 / 11.56 (2 decimals) AND
+  its item values are kept exact, so 2 pcs and 346 g both give 874 kcal · WHEN 2 pieces are logged · THEN the entry is 874 kcal, 346 g, "2 pcs".
+- **AC-NL-6 (pieces only)** — GIVEN a food entered per item **without** a weight · THEN it is logged
+  in pieces only (½, 1, 1.5 …), its entries have no grams AND it is not offered as a dish ingredient,
+  a meal-photo food or a photo-recognition match.
+- **AC-NL-7 (pieces or grams)** — GIVEN a food per 100 g with an item weight (egg 143 kcal/100 g, 55 g) ·
+  WHEN logged · THEN the amount sheet opens on pieces unless the food was last logged in grams, the
+  `g | pcs` switch converts the amount (2 pcs ↔ 110 g), AND an entry logged as 2 pcs stays 2 pcs (its
+  grams and kcal follow) when the item weight is later corrected.
 
 ### Dishes — `AC-DI`
 

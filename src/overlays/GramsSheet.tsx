@@ -6,23 +6,31 @@ import { TrashIcon } from "@/components/icons";
 import { Txt, Visual } from "@/components/ui";
 import { MC } from "@/data/seed";
 import {
+  countable,
   dateForOffset,
   dayKey,
   findDish,
   findFood,
+  fmtPieces,
   foodEmoji,
   isCookable,
   logFromFood,
+  logPieces,
+  parsePieces,
+  piecesOnly,
   round,
+  scaleMacros,
+  shownValues,
   stampIfToday,
   yldOf,
 } from "@/lib/nutrition";
 import { useStore } from "@/store/store";
 import { useSubmitGuard } from "@/lib/useSubmitGuard";
 import { colors, font } from "@/theme";
-import type { Food, FoodPreset } from "@/types";
+import type { Food, FoodPreset, LogEntry } from "@/types";
 
 const PRESETS = [50, 100, 150, 200, 250];
+const PIECE_CHIPS = [0.5, 1, 2, 3, 4];
 
 export function GramsSheet() {
   const { state, patch, close } = useStore();
@@ -72,13 +80,38 @@ export function GramsSheet() {
   // Optional comment shown in the log instead of the food name ("Anything" → "tea with honey").
   const [note, setNote] = useState(gt === "edit" && editLog && editLog.name !== baseName ? editLog.name : "");
 
+  // Pieces: a food entered per item, or with an item weight, can be counted ("2 eggs").
+  // One entered per item without its weight is counted in pieces only.
+  const canCount = countable(geFood);
+  const onlyPcs = piecesOnly(geFood);
+  const pieceG = geFood?.pieceG;
+  const [unit, setUnit] = useState<"g" | "pcs">(canCount && (onlyPcs || state.addPieces != null) ? "pcs" : "g");
+  const [count, setCount] = useState(state.addPieces ? fmtPieces(state.addPieces) : "1");
+  const pcs = canCount && unit === "pcs";
+  const n = pcs ? parsePieces(count) : null;
+  const switchUnit = (u: "g" | "pcs") => {
+    if (u === unit || !pieceG) return;
+    if (u === "pcs") setCount(gu > 0 ? fmtPieces(Math.max(0.5, Math.round((gu / pieceG) * 2) / 2)) : "1");
+    else patch({ addGrams: Math.round((n ?? 1) * pieceG), gMode: "raw" });
+    setUnit(u);
+  };
+  // The entry this amount makes (a food); dishes being edited are scaled below.
+  const preview: LogEntry | null = !geFood ? null : pcs ? (n !== null ? logPieces(geFood, n) : null) : logFromFood(geFood, Math.round(gu), gmode);
+
   const onUncooked = (txt: string) => { const v = parseFloat(txt); patch({ addGrams: isNaN(v) ? 0 : v, gMode: "raw" }); };
   const onCooked = (txt: string) => { const v = parseFloat(txt); patch({ addGrams: isNaN(v) ? 0 : v / geY, gMode: "cooked" }); };
   const setPreset = (pv: number) => { const ug = gmode === "cooked" ? pv / geY : pv; patch({ addGrams: ug }); };
 
   const confirm = () => {
     const k = dayKey(state.dayOffset);
-    if (gt === "edit" && editLog && gePer100) {
+    if (gt === "edit" && editLog && geFood && preview) {
+      const { grams, mode, kcal, p, c, f, pieces } = preview;
+      const logs = { ...state.logs };
+      logs[k] = (logs[k] || []).map((l) =>
+        l.id === state.editId ? { ...l, name: note.trim() || baseName, grams, mode: geCookable ? mode : l.mode, kcal, p, c, f, pieces } : l,
+      );
+      patch({ logs, ov: null, editId: null });
+    } else if (gt === "edit" && editLog && gePer100) {
       const rr = (state.addGrams || 0) / 100;
       const logs = { ...state.logs };
       logs[k] = (logs[k] || []).map((l) =>
@@ -87,15 +120,18 @@ export function GramsSheet() {
           : l,
       );
       patch({ logs, ov: null, editId: null });
-    } else if (gt === "ingredient" && state.dishDraft && state.selFood != null) {
+    } else if (gt === "ingredient" && state.dishDraft && state.selFood != null && preview) {
+      // Dishes are weighed: pieces go in as their grams.
       const dd = state.dishDraft;
       const ing = [...(dd.ing || [])];
-      ing[state.gIngIdx!] = { foodId: state.selFood, grams: Math.round(state.addGrams), mode: gmode };
+      ing[state.gIngIdx!] = { foodId: state.selFood, grams: preview.grams, mode: pcs ? "raw" : gmode };
       patch({ dishDraft: { ...dd, ing }, ov: "dishEdit", selFood: null, gIngIdx: null });
-    } else if (geFood) {
-      const item = stampIfToday(logFromFood(geFood, Math.round(state.addGrams), gmode), state.dayOffset);
+    } else if (geFood && preview) {
+      const item = stampIfToday(preview, state.dayOffset);
       if (note.trim()) item.name = note.trim();
-      patch({ logs: { ...state.logs, [k]: [...(state.logs[k] || []), item] }, ov: null, selFood: null });
+      // Remember grams or pieces, so the food opens the same way next time.
+      const foods = canCount && !onlyPcs && geFood.unit !== unit ? state.foods.map((f) => (f.id === geFood!.id ? { ...f, unit } : f)) : state.foods;
+      patch({ logs: { ...state.logs, [k]: [...(state.logs[k] || []), item] }, foods, ov: null, selFood: null });
     }
   };
   const onClose = () => {
@@ -110,18 +146,25 @@ export function GramsSheet() {
     patch({ logs, ov: null, editId: null });
   };
 
-  const macros = gePer100
+  const shown = geFood ? preview ?? { kcal: 0, p: 0, c: 0, f: 0 } : gePer100 ? scaleMacros(gePer100, ger) : null;
+  const macros = shown
     ? [
-        { label: "KCAL", value: round(gePer100.kcal * ger), color: acc },
-        { label: "PROTEIN", value: round(gePer100.p * ger), color: MC.p },
-        { label: "CARBS", value: round(gePer100.c * ger), color: MC.c },
-        { label: "FAT", value: round(gePer100.f * ger), color: MC.f },
+        { label: "KCAL", value: round(shown.kcal), color: acc },
+        { label: "PROTEIN", value: round(shown.p), color: MC.p },
+        { label: "CARBS", value: round(shown.c), color: MC.c },
+        { label: "FAT", value: round(shown.f), color: MC.f },
       ]
     : [];
 
   const confirmLabel = gt === "edit" ? "Save" : gt === "ingredient" ? "Set amount" : `Add to ${dateWord}`;
-  // Block submitting an empty / zero weight (would create a 0 g, 0-kcal entry).
-  const canConfirm = Math.round(state.addGrams || 0) > 0;
+  // Block submitting an empty / zero amount (would create a 0 g, 0-kcal entry).
+  const canConfirm = pcs ? n !== null : Math.round(state.addGrams || 0) > 0;
+
+  // "450 kcal / pc · 1 pc = 180 g" for a food entered per item, else per 100 g.
+  const sv = geFood ? shownValues(geFood) : null;
+  const subtitle = sv
+    ? `${round(sv.m.kcal)} kcal / ${sv.per === "pc" ? "pc" : "100 g"}${geCookable && sv.per === "100g" ? " uncooked" : ""}${pieceG ? ` · 1 pc = ${fmtPieces(pieceG)} g` : ""}`
+    : gePer100 ? `${round(gePer100.kcal)} kcal / 100 g` : "";
 
   const numBox = (border: string): any => ({ flex: 1, backgroundColor: colors.inset, borderWidth: 2, borderColor: border, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 13 });
 
@@ -132,12 +175,31 @@ export function GramsSheet() {
         <View style={{ flex: 1 }}>
           <Txt style={{ fontSize: 17, fontFamily: font.dB }}>{geName}</Txt>
           <Txt style={{ fontSize: 12, color: colors.muted, fontFamily: font.sb }}>
-            {gePer100 ? `${round(gePer100.kcal)} kcal / 100 g${geCookable ? " uncooked" : ""}` : ""}
+            {subtitle}
           </Txt>
         </View>
       </View>
 
-      {geCookable ? (
+      {canCount && !onlyPcs && (
+        <View accessibilityRole="radiogroup" style={{ flexDirection: "row", alignSelf: "flex-start", gap: 4, padding: 4, backgroundColor: colors.chip, borderWidth: 1, borderColor: colors.border5, borderRadius: 13, marginBottom: 10 }}>
+          {(["g", "pcs"] as const).map((u) => (
+            <Pressable key={u} accessibilityRole="radio" accessibilityState={{ checked: unit === u }} accessibilityLabel={u === "g" ? "Grams" : "Pieces"} onPress={() => switchUnit(u)} style={{ paddingVertical: 7, paddingHorizontal: 18, borderRadius: 9, backgroundColor: unit === u ? acc : "transparent" }}>
+              <Txt style={{ fontSize: 13, fontFamily: font.b, color: unit === u ? colors.bg : colors.muted }}>{u}</Txt>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {pcs ? (
+        <View style={{ backgroundColor: colors.inset, borderWidth: 2, borderColor: acc, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 14, marginBottom: 14 }}>
+          <Txt style={{ fontSize: 11, color: colors.muted, fontFamily: font.b, marginBottom: 4 }}>PIECES</Txt>
+          <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3 }}>
+            <TextInput value={count} onChangeText={(t) => setCount(t.replace(/[^0-9.,]/g, ""))} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.dim} style={{ flex: 1, color: colors.text, fontFamily: font.dB, fontSize: 30, padding: 0 }} />
+            <Txt style={{ fontSize: 16, color: colors.muted, fontFamily: font.b }}>{n === 1 ? "pc" : "pcs"}</Txt>
+            {preview && pieceG ? <Txt style={{ fontSize: 14, color: colors.dim, fontFamily: font.sb, marginLeft: 8 }}>{`= ${preview.grams} g`}</Txt> : null}
+          </View>
+        </View>
+      ) : geCookable ? (
         <>
           <View style={{ flexDirection: "row", gap: 10, marginBottom: 8 }}>
             <View style={numBox(gmode === "raw" ? acc : colors.border)}>
@@ -170,7 +232,12 @@ export function GramsSheet() {
       )}
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 18 }}>
-        {presetChips.map((pr, i) => (
+        {pcs && PIECE_CHIPS.map((v) => (
+          <Pressable key={v} onPress={() => setCount(String(v))} accessibilityLabel={`${fmtPieces(v)} ${v === 1 ? "piece" : "pieces"}`} style={{ flexGrow: 1, minWidth: 56, paddingVertical: 9, paddingHorizontal: 10, borderRadius: 11, backgroundColor: colors.chip, borderWidth: 1, borderColor: colors.border5, alignItems: "center" }}>
+            <Txt style={{ fontSize: 12.5, fontFamily: font.b, color: colors.subtle }}>{v === 0.5 ? "½" : String(v)}</Txt>
+          </Pressable>
+        ))}
+        {!pcs && presetChips.map((pr, i) => (
           <Pressable key={i} onPress={() => setPreset(pr.g)} style={{ flexGrow: 1, minWidth: 56, paddingVertical: 9, paddingHorizontal: 10, borderRadius: 11, backgroundColor: colors.chip, borderWidth: 1, borderColor: colors.border5, alignItems: "center" }}>
             {pr.name ? (
               <>

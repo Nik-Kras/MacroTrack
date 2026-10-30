@@ -66,7 +66,7 @@ export function DishBuilderSheet() {
           <View key={idx} style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.card2, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 11 }}>
             <Visual photo={fo?.photo} name={fo?.name} emoji={foodEmoji(fo)} size={38} radius={11} />
             <Pressable
-              onPress={() => patch({ ov: "grams", gTarget: "ingredient", selFood: ing.foodId, addGrams: ing.grams, gMode: ing.mode === "cooked" ? "cooked" : "raw", gIngIdx: idx })}
+              onPress={() => patch({ ov: "grams", gTarget: "ingredient", selFood: ing.foodId, addGrams: ing.grams, addPieces: null, gMode: ing.mode === "cooked" ? "cooked" : "raw", gIngIdx: idx })}
               style={{ flex: 1, minWidth: 0 }}
             >
               <Txt numberOfLines={1} style={{ fontSize: 14, fontFamily: font.b }}>{fo ? fo.name : "(removed)"}</Txt>

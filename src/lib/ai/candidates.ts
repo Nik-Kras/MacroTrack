@@ -1,4 +1,5 @@
 import bridgeRaw from "@/data/bridge.json";
+import { piecesOnly } from "@/lib/nutrition";
 import type { Food } from "@/types";
 
 import type { MatchFood } from "./match";
@@ -88,7 +89,9 @@ const LATIN = /[a-z]/i;
  * ties), and the everyday default for generic words.
  */
 export function matchCandidates(foods: Food[]): { foods: MatchFood[]; generic: Record<string, string> } {
-  const ordered = [...foods.filter((f) => f.custom), ...foods.filter((f) => !f.custom)];
+  // Photo lines are weighed: a food counted in pieces only can't be one.
+  const weighed = foods.filter((f) => !piecesOnly(f));
+  const ordered = [...weighed.filter((f) => f.custom), ...weighed.filter((f) => !f.custom)];
   const linked = new Map<string, string>(); // bridge id → first food id linked to it
   const out: MatchFood[] = ordered.map((f) => {
     const id = String(f.id);

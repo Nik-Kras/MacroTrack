@@ -4,6 +4,14 @@ export type ActivityKey = "sedentary" | "light" | "moderate" | "very" | "extra";
 export type GoalKey = "fatloss" | "maintain" | "gain";
 export type CookMode = "raw" | "cooked" | "na";
 
+/** Energy and macros: kcal, protein, carbs, fat (g). */
+export interface Macros {
+  kcal: number;
+  p: number;
+  c: number;
+  f: number;
+}
+
 export interface Food {
   id: number | string;
   name: string;
@@ -21,6 +29,16 @@ export interface Food {
   /** Custom quick amounts (uncooked grams, optionally named — "1 slice" = 35 g).
    *  When set, these replace the default 50/100/… presets in the grams sheet. */
   presets?: FoodPreset[];
+  /** Weight of one item, g (an egg ≈ 55 g, a bar 45 g): the food can be logged in pieces as well as grams. */
+  pieceG?: number;
+  /**
+   * The values for one item, when the food was entered per item (a sandwich, a slice of pizza).
+   * kcal/p/c/f then hold the per-100 g values worked out with pieceG; without pieceG they are 0
+   * and the food is counted in pieces only (not offered for dishes or meal photos).
+   */
+  item?: Macros;
+  /** How it was last logged, so the amount sheet opens the same way next time. */
+  unit?: "g" | "pcs";
 }
 
 export interface FoodPreset {
@@ -59,6 +77,8 @@ export interface LogEntry {
   c: number;
   f: number;
   cat: string;
+  /** Logged by count: how many pieces. grams = pieces × the item weight (0 when it isn't known). */
+  pieces?: number;
   /** Epoch ms, set only for entries logged to the live day; back-filled and
    *  legacy entries have none and are never grouped into meals. */
   at?: number;

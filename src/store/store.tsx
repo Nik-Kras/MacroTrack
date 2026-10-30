@@ -67,6 +67,10 @@ export interface FoodDraft {
   yld: number | string;
   /** Quick-amount rows being edited; grams kept as raw input text until save. */
   presets: { g: string; name: string }[];
+  /** What the typed values are for: 100 g or one item. */
+  per: "100g" | "pc";
+  /** Weight of one item as typed (optional). */
+  pieceG: string;
   fromDish?: boolean;
 }
 
@@ -97,6 +101,8 @@ export interface AppState {
   addCat: "all" | CategoryKey;
   selFood: number | string | null;
   addGrams: number;
+  /** Amount sheet counting pieces: how many; null = by weight. */
+  addPieces: number | null;
   /** What picking a food in Add food does: log it, add it to a dish, or set a photo line. */
   searchMode: "log" | "dish" | "photo";
   // dish overlay
@@ -138,6 +144,7 @@ const initialUI = {
   addCat: "all" as const,
   selFood: null,
   addGrams: 100,
+  addPieces: null,
   searchMode: "log" as const,
   selDish: null,
   dishServings: 1,

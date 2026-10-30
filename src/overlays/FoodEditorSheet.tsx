@@ -6,7 +6,7 @@ import { TrashIcon } from "@/components/icons";
 import { Txt, Visual } from "@/components/ui";
 import { CATMETA, EMOJIS } from "@/data/seed";
 import { pickPhoto } from "@/lib/photo";
-import { deleteFood, saveFood } from "@/overlays/editorActions";
+import { deleteFood, parsePieceG, saveFood } from "@/overlays/editorActions";
 import { useSubmitGuard } from "@/lib/useSubmitGuard";
 import { useStore } from "@/store/store";
 import { applyPhotoPick } from "@/overlays/PhotoSheet";
@@ -24,6 +24,24 @@ export function FoodEditorSheet() {
   const autoK = Math.round((+FD.p || 0) * 4 + (+FD.c || 0) * 4 + (+FD.f || 0) * 9);
   const kcalValue = FD.kcalManual ? FD.kcal : autoK;
 
+  // Per item: the values are for one item; its weight is optional, and without it the
+  // food is counted in pieces only (no cooking yield, no gram amounts).
+  const perPc = FD.per === "pc";
+  const pieceG = parsePieceG(FD.pieceG);
+  const onlyPcs = perPc && !pieceG;
+  // Made for a dish or a meal photo, it goes straight in by weight: per item, its weight is needed.
+  const weighedUse = !!FD.fromDish || (state.searchMode === "photo" && !!state.photoPick);
+  const needsWeight = weighedUse && onlyPcs;
+  const switchPer = (per: "100g" | "pc") => {
+    if (per === FD.per) return;
+    // With a known item weight the same food is shown the other way; otherwise the numbers stay.
+    if (!pieceG) return setFD("per", per);
+    const k = per === "pc" ? pieceG / 100 : 100 / pieceG;
+    const num = (x: number | string) => (String(x).trim() === "" ? "" : String(+((+x || 0) * k).toFixed(1)));
+    patch({ foodDraft: { ...FD, per, p: num(FD.p), c: num(FD.c), f: num(FD.f), kcal: Math.round((+FD.kcal || 0) * k) } });
+  };
+  const segBtn = (on: boolean) => ({ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center" as const, backgroundColor: on ? acc : "transparent" });
+
   const presets = FD.presets || [];
   const setPresetRow = (i: number, k: "g" | "name", v: string) => {
     const next = presets.slice();
@@ -40,7 +58,7 @@ export function FoodEditorSheet() {
       applyPhotoPick(store, saved.id);
     } else if (FD.fromDish) {
       const d = state.dishDraft || { id: null, name: "", servings: 2, emoji: "🍽", photo: "", ing: [] };
-      patch({ dishDraft: d, ov: "grams", gTarget: "ingredient", selFood: saved.id, addGrams: 100, gMode: "raw", gIngIdx: d.ing.length, searchMode: "log", foodDraft: null });
+      patch({ dishDraft: d, ov: "grams", gTarget: "ingredient", selFood: saved.id, addGrams: 100, addPieces: null, gMode: "raw", gIngIdx: d.ing.length, searchMode: "log", foodDraft: null });
     } else {
       patch({ ov: "addFood", foodDraft: null });
     }
@@ -89,8 +107,17 @@ export function FoodEditorSheet() {
         })}
       </ScrollView>
 
+      {/* values per 100 g or per item */}
+      <View accessibilityRole="radiogroup" style={{ flexDirection: "row", gap: 4, padding: 4, backgroundColor: colors.chip, borderWidth: 1, borderColor: colors.border5, borderRadius: 14, marginBottom: 14 }}>
+        {(["100g", "pc"] as const).map((per) => (
+          <Pressable key={per} accessibilityRole="radio" accessibilityState={{ checked: FD.per === per }} onPress={() => switchPer(per)} style={segBtn(FD.per === per)}>
+            <Txt style={{ fontSize: 13, fontFamily: font.b, color: FD.per === per ? colors.bg : colors.muted }}>{per === "pc" ? "Per item" : "Per 100 g"}</Txt>
+          </Pressable>
+        ))}
+      </View>
+
       {/* macros */}
-      <Txt style={{ fontSize: 11, color: colors.muted, fontFamily: font.b, marginBottom: 8 }}>Macros / 100 g</Txt>
+      <Txt style={{ fontSize: 11, color: colors.muted, fontFamily: font.b, marginBottom: 8 }}>{perPc ? "Macros per item" : "Macros / 100 g"}</Txt>
       <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
         {numField("PROTEIN", FD.p, (t) => setFD("p", t), MCColor("p"))}
         {numField("CARBS", FD.c, (t) => setFD("c", t), MCColor("c"))}
@@ -118,6 +145,24 @@ export function FoodEditorSheet() {
         </Pressable>
       </View>
 
+      {/* weight of one item */}
+      <Txt style={{ fontSize: 11, color: colors.muted, fontFamily: font.b, marginBottom: 6 }}>{perPc ? "Weight of one item (optional)" : "Weight of one piece (optional)"}</Txt>
+      <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3, backgroundColor: colors.inset, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 13 }}>
+        <TextInput value={FD.pieceG} onChangeText={(t) => setFD("pieceG", t.replace(/[^0-9.,]/g, ""))} keyboardType="decimal-pad" placeholder={perPc ? "e.g. 180" : "e.g. 55"} placeholderTextColor={colors.dim} style={{ flex: 1, color: colors.text, fontFamily: font.dB, fontSize: 16, padding: 0 }} />
+        <Txt style={{ fontSize: 11, color: colors.dim, fontFamily: font.b }}>g</Txt>
+      </View>
+      <Txt style={{ fontSize: 11, color: colors.dim, fontFamily: font.sb, marginTop: 6, marginBottom: 18 }}>
+        {perPc
+          ? pieceG
+            ? `= ${Math.round((kcalValue * 100) / pieceG)} kcal / 100 g. Log it in pieces or grams, and use it in dishes.`
+            : weighedUse
+              ? `Needed here: ${FD.fromDish ? "dishes" : "meal photos"} are weighed.`
+              : "Without it, you log this food in pieces only, and it can't go into dishes or meal photos."
+          : pieceG
+            ? `1 piece = ${Math.round((kcalValue * pieceG) / 100)} kcal. Log it in pieces or grams.`
+            : "e.g. an egg ≈ 55 g: then you can log it in pieces too."}
+      </Txt>
+
       {/* categories */}
       <Txt style={{ fontSize: 11, color: colors.muted, fontFamily: font.b, marginBottom: 8 }}>Categories</Txt>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -20, marginBottom: 18 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 7 }}>
@@ -133,6 +178,7 @@ export function FoodEditorSheet() {
       </ScrollView>
 
       {/* cookable */}
+      {!onlyPcs && (<>
       <Txt style={{ fontSize: 11, color: colors.muted, fontFamily: font.b, marginBottom: 8 }}>Changes weight when cooked?</Txt>
       <View style={{ flexDirection: "row", gap: 8, marginBottom: FD.cookable ? 10 : 22 }}>
         <Pressable onPress={() => setFD("cookable", true)} style={{ flex: 1, paddingVertical: 11, borderRadius: 12, alignItems: "center", backgroundColor: FD.cookable ? acc : colors.chip, borderWidth: FD.cookable ? 0 : 1, borderColor: colors.border5 }}>
@@ -153,8 +199,10 @@ export function FoodEditorSheet() {
           </Txt>
         </View>
       )}
+      </>)}
 
       {/* quick amounts */}
+      {!onlyPcs && (<>
       <Txt style={{ fontSize: 11, color: colors.muted, fontFamily: font.b, marginBottom: 4 }}>Quick amounts (optional)</Txt>
       <Txt style={{ fontSize: 11, color: colors.dim, fontFamily: font.sb, marginBottom: 8 }}>
         One-tap portions shown when logging this food — e.g. 35 g named "1 slice". Leave empty to keep the standard 50–250 g row.
@@ -192,6 +240,7 @@ export function FoodEditorSheet() {
       >
         <Txt style={{ fontSize: 13, fontFamily: font.b, color: colors.subtle }}>+ Add amount</Txt>
       </Pressable>
+      </>)}
 
       <View style={{ flexDirection: "row", gap: 10 }}>
         {FD.custom && FD.id != null && (
@@ -199,7 +248,7 @@ export function FoodEditorSheet() {
             <TrashIcon />
           </Pressable>
         )}
-        <Pressable onPress={guard(onSave)} style={{ flex: 1, backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center" }}>
+        <Pressable onPress={guard(onSave)} disabled={needsWeight} style={{ flex: 1, backgroundColor: acc, borderRadius: 16, padding: 15, alignItems: "center", opacity: needsWeight ? 0.4 : 1 }}>
           <Txt style={{ color: colors.bg, fontFamily: font.xb, fontSize: 16 }}>{FD.id ? "Save changes" : "Add food"}</Txt>
         </Pressable>
       </View>
