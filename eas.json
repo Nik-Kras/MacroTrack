@@ -4,16 +4,15 @@
   },
   "build": {
     "internal": {
+      "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "distribution": "internal"
+      }
     },
     "testflight": {
       "ios": {
         "simulator": false
-      },
-      "distribution": "store"
+      }
     }
   },
   "submit": {
