@@ -1,8 +1,8 @@
-import { defineConfig } from 'vitest/config';
+import path from "node:path";
+import { defineConfig } from "vitest/config";
 
+// Pure logic in src/lib is unit-tested here; screens are checked on the emulator.
 export default defineConfig({
-  test: {
-    environment: 'node',
-    include: ['tests/**/*.test.ts']
-  }
+  resolve: { alias: { "@": path.resolve(__dirname, "src") } },
+  test: { include: ["src/**/*.test.ts"] },
 });
