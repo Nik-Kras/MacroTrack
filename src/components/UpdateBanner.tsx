@@ -7,12 +7,14 @@ import { Txt } from "@/components/ui";
 import { isNewer, LATEST_APK_URL, LATEST_RELEASE_API, releaseVersion } from "@/lib/update";
 import { colors, font } from "@/theme";
 
-const CHECK_EVERY_MS = 60 * 60 * 1000;
+// Each return to the app looks again (a minute apart at most): Android keeps the app in memory for days, so an
+// hourly limit meant a release could stay unseen.
+const CHECK_EVERY_MS = 60 * 1000;
 
 /**
  * "Update available · Update" at the top of Nutrition (as in RHP and MamaKcal). Checks
- * the repo's latest GitHub release when the app starts and comes back to the screen (at
- * most hourly); Update opens the new APK in the browser, which downloads it and offers
+ * the repo's latest GitHub release when the app starts and each time it comes back to the
+ * foreground (at most once a minute); Update opens the new APK in the browser, which downloads it and offers
  * Install. Release builds only.
  */
 export function UpdateBanner() {
