@@ -10,6 +10,7 @@ import {
   DEFAULT_PROFILE,
   DISHRAW,
   FOODS,
+  refreshSeedYields,
 } from "@/data/seed";
 import { matchCandidates } from "@/lib/ai/candidates";
 import { activeCorrections, learnFromMeal, type Correction } from "@/lib/ai/learn";
@@ -230,7 +231,7 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
             ...s,
             profile: data.profile ?? s.profile,
             logs: data.logs ?? s.logs,
-            foods: data.foods ?? s.foods,
+            foods: data.foods ? refreshSeedYields(data.foods) : s.foods,
             dishes: data.dishes ?? s.dishes,
             measurements: data.measurements ?? s.measurements,
             learned: data.learned ?? s.learned,
@@ -385,7 +386,7 @@ export function AppProvider({ children, name }: { children: React.ReactNode; nam
           ...s,
           profile: data.profile ?? s.profile,
           logs: data.logs ?? s.logs,
-          foods: data.foods ?? s.foods,
+          foods: data.foods ? refreshSeedYields(data.foods) : s.foods,
           dishes: data.dishes ?? s.dishes,
           measurements: data.measurements ?? s.measurements,
           learned: data.learned ?? s.learned,

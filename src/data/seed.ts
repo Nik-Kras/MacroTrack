@@ -44,25 +44,25 @@ export const CATMETA: { key: CategoryKey; label: string; color: string }[] = [
 ];
 
 export const FOODS: Food[] = [
-  { id: 1, name: "Chicken breast", kcal: 120, p: 23, c: 0, f: 2.6, cats: ["protein", "low-cal"], cookable: true, yld: 0.85 },
-  { id: 2, name: "Salmon fillet", kcal: 208, p: 20, c: 0, f: 13, cats: ["protein", "fat"], cookable: true, yld: 0.82 },
+  { id: 1, name: "Chicken breast", kcal: 120, p: 23, c: 0, f: 2.6, cats: ["protein", "low-cal"], cookable: true, yld: 0.75 },
+  { id: 2, name: "Salmon fillet", kcal: 208, p: 20, c: 0, f: 13, cats: ["protein", "fat"], cookable: true, yld: 0.85 },
   { id: 3, name: "Egg", kcal: 143, p: 13, c: 0.7, f: 9.5, cats: ["protein", "fat"] },
   { id: 4, name: "Greek yogurt 0%", kcal: 59, p: 10, c: 3.6, f: 0.4, cats: ["protein", "low-cal"] },
   { id: 5, name: "Tofu", kcal: 76, p: 8, c: 1.9, f: 4.8, cats: ["protein", "low-cal"], cookable: true, yld: 0.9 },
-  { id: 6, name: "Lentils", kcal: 352, p: 24.6, c: 63.4, f: 1, cats: ["protein", "carbs"], cookable: true, yld: 2.4 },
-  { id: 7, name: "Black beans", kcal: 341, p: 21, c: 62, f: 1.4, cats: ["protein", "carbs"], cookable: true, yld: 2.4 },
+  { id: 6, name: "Lentils", kcal: 352, p: 24.6, c: 63.4, f: 1, cats: ["protein", "carbs"], cookable: true, yld: 3.0 },
+  { id: 7, name: "Black beans", kcal: 341, p: 21, c: 62, f: 1.4, cats: ["protein", "carbs"], cookable: true, yld: 2.55 },
   { id: 8, name: "Whey protein", kcal: 380, p: 80, c: 8, f: 6, cats: ["protein", "high-cal"] },
   { id: 9, name: "Tuna, canned", kcal: 85, p: 19.4, c: 0, f: 1, cats: ["protein", "low-cal"] },
   { id: 10, name: "Lean beef", kcal: 187, p: 21, c: 0, f: 11, cats: ["protein", "high-cal"], cookable: true, yld: 0.75 },
   { id: 11, name: "Cottage cheese", kcal: 86, p: 11, c: 4.6, f: 2.3, cats: ["protein", "low-cal"] },
-  { id: 12, name: "Oats", kcal: 389, p: 17, c: 66, f: 7, cats: ["carbs", "high-cal"], cookable: true, yld: 2.5 },
-  { id: 13, name: "White rice", kcal: 365, p: 7, c: 80, f: 0.6, cats: ["carbs", "high-cal"], cookable: true, yld: 2.5 },
-  { id: 14, name: "Brown rice", kcal: 370, p: 7.5, c: 76, f: 2.9, cats: ["carbs", "high-cal"], cookable: true, yld: 2.6 },
+  { id: 12, name: "Oats", kcal: 389, p: 17, c: 66, f: 7, cats: ["carbs", "high-cal"], cookable: true, yld: 5.4 },
+  { id: 13, name: "White rice", kcal: 365, p: 7, c: 80, f: 0.6, cats: ["carbs", "high-cal"], cookable: true, yld: 2.8 },
+  { id: 14, name: "Brown rice", kcal: 370, p: 7.5, c: 76, f: 2.9, cats: ["carbs", "high-cal"], cookable: true, yld: 2.95 },
   { id: 15, name: "Sweet potato", kcal: 86, p: 1.6, c: 20, f: 0.1, cats: ["carbs", "low-cal"], cookable: true, yld: 0.9 },
   { id: 16, name: "Banana", kcal: 89, p: 1.1, c: 23, f: 0.3, cats: ["carbs", "low-cal"] },
-  { id: 17, name: "Quinoa", kcal: 368, p: 14, c: 64, f: 6, cats: ["carbs", "high-cal"], cookable: true, yld: 2.9 },
+  { id: 17, name: "Quinoa", kcal: 368, p: 14, c: 64, f: 6, cats: ["carbs", "high-cal"], cookable: true, yld: 3.05 },
   { id: 18, name: "Whole wheat bread", kcal: 254, p: 12.3, c: 43.1, f: 3.6, cats: ["carbs"] },
-  { id: 19, name: "Pasta", kcal: 371, p: 13, c: 75, f: 1.5, cats: ["carbs", "high-cal"], cookable: true, yld: 2.3 },
+  { id: 19, name: "Pasta", kcal: 371, p: 13, c: 75, f: 1.5, cats: ["carbs", "high-cal"], cookable: true, yld: 2.35 },
   { id: 20, name: "Apple", kcal: 52, p: 0.3, c: 14, f: 0.2, cats: ["carbs", "low-cal"] },
   { id: 21, name: "Avocado", kcal: 160, p: 2, c: 8.5, f: 14.7, cats: ["fat", "high-cal"] },
   { id: 22, name: "Olive oil", kcal: 884, p: 0, c: 0, f: 100, cats: ["fat", "high-cal"] },
@@ -70,11 +70,34 @@ export const FOODS: Food[] = [
   { id: 24, name: "Peanut butter", kcal: 588, p: 25, c: 20, f: 50, cats: ["fat", "high-cal"] },
   { id: 25, name: "Walnuts", kcal: 654, p: 15, c: 14, f: 65, cats: ["fat", "high-cal"] },
   { id: 26, name: "Chia seeds", kcal: 486, p: 16.5, c: 42, f: 30.7, cats: ["fat"] },
-  { id: 27, name: "Broccoli", kcal: 34, p: 2.8, c: 6.6, f: 0.4, cats: ["low-cal"], cookable: true, yld: 0.9 },
-  { id: 28, name: "Spinach", kcal: 23, p: 2.9, c: 3.6, f: 0.4, cats: ["low-cal"], cookable: true, yld: 0.35 },
+  { id: 27, name: "Broccoli", kcal: 34, p: 2.8, c: 6.6, f: 0.4, cats: ["low-cal"], cookable: true, yld: 1.05 },
+  { id: 28, name: "Spinach", kcal: 23, p: 2.9, c: 3.6, f: 0.4, cats: ["low-cal"], cookable: true, yld: 0.85 },
   { id: 29, name: "Cheddar cheese", kcal: 403, p: 22.9, c: 3.4, f: 33.3, cats: ["fat", "protein", "high-cal"] },
   { id: 30, name: "Milk 2%", kcal: 50, p: 3.4, c: 4.9, f: 2, cats: ["protein"] },
 ];
+
+/**
+ * Cooking yields (cooked g per uncooked g) shipped before 1.3.0, for the built-in foods whose yield was corrected
+ * in 1.3.0 against USDA Cooking Yields (2014), USDA SR Legacy raw/cooked pairs and Bognár (2002). Chicken breast
+ * was 0.85 (≈ 0.75), dry pasta 2.3 (2.35), white rice 2.5 (2.8), oats 2.5 (porridge with water ≈ 5.4), spinach
+ * 0.35 (boiled or wilted ≈ 0.85). Lentils use 3.0, the calorie ratio of dry to cooked, since some solids stay in the water.
+ */
+const OLD_YLD: Record<number, number> = { 1: 0.85, 2: 0.82, 6: 2.4, 7: 2.4, 12: 2.5, 13: 2.5, 14: 2.6, 17: 2.9, 19: 2.3, 27: 0.9, 28: 0.35 };
+
+/**
+ * Brings saved built-in foods up to the current yields. Foods are stored with the user's data, so new seed values
+ * don't reach existing installs or restored backups on their own; a yield the user changed is left alone.
+ */
+export function refreshSeedYields(foods: Food[]): Food[] {
+  const seed = new Map(FOODS.map((f) => [f.id, f]));
+  return foods.map((f) => {
+    if (f.custom || typeof f.id !== "number") return f;
+    const s = seed.get(f.id);
+    const old = OLD_YLD[f.id];
+    if (!s?.yld || old === undefined || f.yld !== old) return f;
+    return { ...f, yld: s.yld };
+  });
+}
 
 export const DISHRAW: Dish[] = [
   { id: "d1", name: "Chicken & Rice Bowl", servings: 2, glyph: "🍗", ing: [[1, 350], [13, 100], [27, 200], [22, 12]] },
